@@ -1,0 +1,66 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isAuth() { return request.auth != null; }
+    function isAdmin() {
+      return isAuth() &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+    function isOwner(uid) { return isAuth() && request.auth.uid == uid; }
+
+    match /users/{uid} {
+      allow read, write: if isOwner(uid) || isAdmin();
+    }
+
+    match /children/{childId} {
+      // Lecture ouverte à tout membre authentifié : le covoiturage est
+      // collaboratif (règle 7) — chaque parent doit voir les enfants à
+      // affecter et leur point de prise en charge. Écriture admin only.
+      allow read: if isAuth();
+      allow write: if isAdmin();
+    }
+
+    match /events/{eventId} {
+      allow read: if isAuth();
+      allow write: if isAdmin();
+    }
+
+    match /needs/{needId} {
+      allow read: if isAuth();
+      allow create: if isAuth();
+      allow update, delete: if isAuth() &&
+        (isAdmin() || request.auth.uid == resource.data.declaredByUid);
+    }
+
+    match /offers/{offerId} {
+      allow read: if isAuth();
+      allow create: if isAuth();
+      allow update, delete: if isAuth() &&
+        (isAdmin() || request.auth.uid == resource.data.driverUid);
+    }
+
+    match /rides/{rideId} {
+      // Covoiturage collaboratif (règle 7) : tout membre authentifié peut
+      // créer un trajet et y affecter/retirer des enfants.
+      allow read: if isAuth();
+      allow create, update: if isAuth();
+      // Suppression réservée à l'admin ou au chauffeur du trajet.
+      allow delete: if isAuth() &&
+        (isAdmin() || request.auth.uid == resource.data.driverUid);
+    }
+
+    match /config/{docId} {
+      allow read, write: if isAdmin();
+    }
+
+    match /invitations/{invId} {
+      allow read, write: if isAdmin();
+    }
+
+    match /notifications/{notifId} {
+      allow read: if isAuth() && request.auth.uid == resource.data.recipientUid;
+      allow write: if isAdmin();
+    }
+  }
+}

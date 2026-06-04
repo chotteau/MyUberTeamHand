@@ -1,0 +1,23 @@
+# Dépendances
+node_modules/
+handcovoiturage/node_modules/
+functions/node_modules/
+
+# Build
+dist/
+handcovoiturage/dist/
+functions/lib/
+
+# Variables d'environnement — NE JAMAIS COMMITER
+.env
+.env.local
+.env.*.local
+handcovoiturage/.env.local
+
+# Firebase
+.firebase/
+.firebaserc
+
+# IDE
+.DS_Store
+*.log
