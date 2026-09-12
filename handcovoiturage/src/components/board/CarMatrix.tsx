@@ -148,14 +148,14 @@ export function CarMatrix({ event, participants, cars, editable, threshold, canR
           <tbody>
             {rows.map((p) => (
               <tr key={p.childId} className="border-t border-slate-100">
-                <td className="sticky left-0 z-10 bg-white p-2 align-top">
-                  <div className="font-medium text-secondary">{p.childName}</div>
-                  <div className="text-xs text-slate-400">
-                    {directions
-                      .filter((d) => p[d])
-                      .map((d) => `${DIR_LABEL[d]} : ${tripAddressLabel(p[d])}`)
-                      .join(' · ')}
-                  </div>
+                <td
+                  className="sticky left-0 z-10 bg-white p-2 align-middle font-medium text-secondary"
+                  title={directions
+                    .filter((d) => p[d])
+                    .map((d) => `${DIR_LABEL[d]} : ${tripAddressLabel(p[d])}`)
+                    .join(' · ')}
+                >
+                  {p.childName}
                 </td>
                 {columns.map((col) => {
                   const present = !!p[col.direction]
