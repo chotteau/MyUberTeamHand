@@ -1,74 +1,52 @@
-# Déploiement — MyUberTeamHand
+# Déploiement — MyUberTeamHand (v2.0)
 
-Projet Firebase : **`myuberteamhand`**
-Console : https://console.firebase.google.com/project/myuberteamhand
+Projet Firebase : **`myuberteamhand`** — https://console.firebase.google.com/project/myuberteamhand
+App : https://myuberteamhand.web.app
 
-## ✅ Déjà configuré (automatiquement)
+## Prérequis (une fois)
 
-- [x] Projet Firebase `myuberteamhand` créé
-- [x] App web enregistrée, clés réelles dans `.env.local`
-- [x] `.firebaserc` pointant sur `myuberteamhand`
-- [x] Base **Firestore** créée (région `eur3` / Europe)
-- [x] **Règles de sécurité** déployées (`firestore.rules`)
-- [x] **Index** déployés (`firestore.indexes.json`)
-- [x] **Hosting** déployé → https://myuberteamhand.web.app
-- [x] APIs activées : Firestore, Identity Toolkit
-
-## ⏳ Étapes restantes (action requise)
-
-### 1. Activer les providers d'authentification
-
-Le plus simple (gratuit, 30 s) — dans la console :
-https://console.firebase.google.com/project/myuberteamhand/authentication/providers
-→ Activer **E‑mail/Mot de passe** puis **Google**.
-
-> L'activation par API est bloquée tant que la facturation n'est pas active
-> (`BILLING_NOT_ENABLED`). Après avoir activé Blaze (étape 3), vous pouvez aussi
-> lancer : `node scripts/enableAuthProviders.mjs`
-
-### 2. Se connecter et devenir admin
-
-1. Ouvrez https://myuberteamhand.web.app et créez votre compte (email/mot de passe).
-2. Promouvez‑vous administrateur :
+1. **Auth** : activer *E‑mail/Mot de passe* et *Google* dans
+   https://console.firebase.google.com/project/myuberteamhand/authentication/providers
+2. **Admin** : se connecter une fois sur l'app, puis
    ```bash
    node scripts/setAdmin.mjs christophe@chotteau.com
    ```
-3. Rechargez la page : l'onglet **Admin** apparaît.
+3. **Blaze** (Cloud Functions) : https://console.firebase.google.com/project/myuberteamhand/usage/details
 
-### 3. Activer la facturation Blaze (pour les Cloud Functions)
-
-https://console.firebase.google.com/project/myuberteamhand/usage/details
-→ Passer au plan **Blaze** (pay‑as‑you‑go, quota gratuit généreux).
-
-Puis déployer les fonctions :
-```bash
-cd functions && npm install && npm run build && cd ..
-firebase deploy --only functions --project myuberteamhand
-```
-
-Fonctions déployées :
-- `syncIcs` — cron 24 h : synchro calendrier FFHB
-- `triggerIcsSync` — bouton « Sync ICS » de l'admin
-- `onRideChange` — emails d'affectation / changement
-- `sendReminders` — cron 18 h : rappels J‑1
-- `calendarExport` — export ICS public (`/api/calendar/handcovoiturage.ics`)
-
-### 4. Configurer la clé Brevo (emails)
-
-⚠️ **Jamais** dans `.env` côté client. Dans la page **Admin → Config** de l'app,
-renseignez `brevoApiKey` et `emailFrom` (stockés dans Firestore `config/app`,
-lus uniquement par les Cloud Functions).
-
-### 5. (Optionnel) Données de configuration initiales
-
-Dans **Admin → Config** : saison, jours d'entraînement, URL ICS FFHB, vacances,
-puis bouton **« Générer les entraînements »**. Importez les familles via
-**Admin → Familles → Importer CSV**.
-
-## Redéploiements courants
+## Déployer
 
 ```bash
-npm run build && firebase deploy --only hosting           # front
-firebase deploy --only firestore:rules                    # règles
-firebase deploy --only functions                          # fonctions (Blaze)
+# Front
+npm run build && firebase deploy --only hosting
+
+# Règles Firestore (v2 : participants / cars — obligatoire avec le front v2)
+firebase deploy --only firestore:rules,firestore:indexes
+
+# Fonctions (le build est lancé automatiquement par le predeploy)
+firebase deploy --only functions
 ```
+
+Fonctions v2 :
+- `syncIcs` — cron 03:00 : synchro matchs FFHB (ne réactive jamais un match annulé par l'admin)
+- `triggerIcsSync` — bouton « Sync FFHB » de l'admin
+- `calendarExport` — calendrier partagé `GET /api/calendar/{token}.ics`
+
+Supprimées en v2 : `onRideChange`, `sendReminders` (plus d'email). Lors du premier
+déploiement v2, `firebase deploy --only functions` propose de les supprimer : répondre **oui**.
+
+## Passage v1 → v2 (données)
+
+Aucun email, aucun secret : plus rien à configurer côté Brevo.
+
+1. **Admin → Config** : vérifier saison / jours, cliquer **Générer le lien** du calendrier, **Enregistrer**,
+   puis **Générer / Regénérer le calendrier de la saison**.
+2. **Admin → Familles** : ré‑importer le CSV (format sans nom / tél / capacité). Les fiches existantes
+   sont mises à jour avec la nouvelle structure d'adresses (défaut / secondaire).
+3. Les anciennes collections `needs`, `offers`, `rides`, `invitations`, `notifications` ne sont plus
+   lues : les supprimer depuis la console Firestore (optionnel).
+4. Chaque parent se connecte avec l'email du CSV : ses enfants lui sont associés automatiquement.
+
+## Calendrier partagé
+
+Le lien (avec token) est affiché dans **Mon profil** de chaque parent. Regénérer le token dans
+Admin → Config invalide l'ancien lien.

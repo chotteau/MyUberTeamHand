@@ -1,24 +1,31 @@
-import type { Address, Child } from '../types'
+import type { Address, Child, TripAddress, TripAddressKind } from '../types'
 
-/** Formate une adresse en une ligne lisible : « 12 rue X, 75001 Paris ». */
+/** « 12 rue X, 75001 Paris » */
 export function formatAddress(addr: Address): string {
   const cp = [addr.zipCode, addr.city].filter(Boolean).join(' ')
   return [addr.street, cp].filter(Boolean).join(', ')
 }
 
-/** Retrouve une adresse d'un enfant par son id. */
-export function findAddress(
-  child: Child | undefined,
-  addressId: string,
+/** Adresse d'un enfant selon le type choisi (défaut / secondaire). */
+export function childAddress(
+  child: Child,
+  kind: Exclude<TripAddressKind, 'custom'>,
 ): Address | undefined {
-  return child?.addresses.find((a) => a.id === addressId)
+  return kind === 'default' ? child.addresses.default : child.addresses.secondary
 }
 
-/** Snapshot texte d'une adresse d'un enfant (pour les rides/passagers). */
-export function snapshotAddress(
-  child: Child | undefined,
-  addressId: string,
-): string {
-  const addr = findAddress(child, addressId)
-  return addr ? formatAddress(addr) : ''
+/** Construit le snapshot TripAddress depuis la fiche enfant. */
+export function tripAddressFromChild(
+  child: Child,
+  kind: Exclude<TripAddressKind, 'custom'>,
+): TripAddress {
+  const a = childAddress(child, kind) ?? child.addresses.default
+  return { kind, ...a }
+}
+
+/** Libellé court d'une adresse de trajet : « Chez Maman » ou l'adresse custom. */
+export function tripAddressLabel(addr: TripAddress | null): string {
+  if (!addr) return ''
+  if (addr.kind === 'custom') return formatAddress(addr)
+  return addr.label || formatAddress(addr)
 }

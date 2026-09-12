@@ -1,8 +1,5 @@
-import {
-  useMutation,
-  useQuery,
-  useQueryClient,
-} from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { addWeeks, startOfDay } from 'date-fns'
 import {
   createEvent,
   deleteEvent,
@@ -11,19 +8,29 @@ import {
   setEventStatus,
   updateEvent,
 } from '../services/events'
+import { getBoard, summarizeDirection } from '../services/board'
 import type { Event, EventStatus } from '../types'
 
-const EVENTS_KEY = ['events']
+export const EVENTS_KEY = ['events']
 
-/** Liste les événements à venir (par défaut depuis aujourd'hui). */
-export function useEvents(fromDate?: Date) {
+export type EventsRange = 'two-weeks' | 'season' | 'past'
+
+/**
+ * Événements selon la fenêtre : 2 semaines glissantes (défaut), toute la
+ * saison à venir, ou les 4 dernières semaines (passés).
+ */
+export function useEvents(range: EventsRange = 'two-weeks') {
+  const today = startOfDay(new Date())
   return useQuery({
-    queryKey: [...EVENTS_KEY, fromDate?.toISOString() ?? 'now'],
-    queryFn: () => listEvents(fromDate),
+    queryKey: [...EVENTS_KEY, range, today.toISOString()],
+    queryFn: () => {
+      if (range === 'two-weeks') return listEvents(today, addWeeks(today, 2))
+      if (range === 'past') return listEvents(addWeeks(today, -4), today)
+      return listEvents(today)
+    },
   })
 }
 
-/** Récupère un événement par id. */
 export function useEvent(id: string | undefined) {
   return useQuery({
     queryKey: [...EVENTS_KEY, id],
@@ -32,37 +39,54 @@ export function useEvent(id: string | undefined) {
   })
 }
 
-export function useCreateEvent() {
+/** Résumé aller / retour d'un événement (compteurs dérivés). */
+export function useEventSummary(eventId: string) {
+  return useQuery({
+    queryKey: [...EVENTS_KEY, eventId, 'summary'],
+    queryFn: async () => {
+      const board = await getBoard(eventId)
+      return {
+        board,
+        aller: summarizeDirection(board, 'aller'),
+        retour: summarizeDirection(board, 'retour'),
+      }
+    },
+    staleTime: 15_000,
+  })
+}
+
+function useInvalidateEvents() {
   const qc = useQueryClient()
+  return () => qc.invalidateQueries({ queryKey: EVENTS_KEY })
+}
+
+export function useCreateEvent() {
+  const invalidate = useInvalidateEvents()
   return useMutation({
-    mutationFn: (data: Omit<Event, 'id' | 'createdAt' | 'updatedAt'>) =>
-      createEvent(data),
-    onSuccess: () => qc.invalidateQueries({ queryKey: EVENTS_KEY }),
+    mutationFn: (data: Omit<Event, 'id' | 'createdAt' | 'updatedAt'>) => createEvent(data),
+    onSuccess: invalidate,
   })
 }
 
 export function useUpdateEvent() {
-  const qc = useQueryClient()
+  const invalidate = useInvalidateEvents()
   return useMutation({
     mutationFn: ({ id, patch }: { id: string; patch: Partial<Event> }) =>
       updateEvent(id, patch),
-    onSuccess: () => qc.invalidateQueries({ queryKey: EVENTS_KEY }),
+    onSuccess: invalidate,
   })
 }
 
 export function useSetEventStatus() {
-  const qc = useQueryClient()
+  const invalidate = useInvalidateEvents()
   return useMutation({
     mutationFn: ({ id, status }: { id: string; status: EventStatus }) =>
       setEventStatus(id, status),
-    onSuccess: () => qc.invalidateQueries({ queryKey: EVENTS_KEY }),
+    onSuccess: invalidate,
   })
 }
 
 export function useDeleteEvent() {
-  const qc = useQueryClient()
-  return useMutation({
-    mutationFn: (id: string) => deleteEvent(id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: EVENTS_KEY }),
-  })
+  const invalidate = useInvalidateEvents()
+  return useMutation({ mutationFn: deleteEvent, onSuccess: invalidate })
 }

@@ -1,22 +1,62 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { listChildren, setChildActive } from '../services/children'
+import {
+  createChild,
+  listChildren,
+  listMyChildren,
+  setChildActive,
+  updateChild,
+  updateChildAddresses,
+  type ChildInput,
+} from '../services/children'
+import { useAuth } from './useAuth'
+import type { ChildAddresses } from '../types'
 
-const CHILDREN_KEY = ['children']
+export const CHILDREN_KEY = ['children']
 
-/** Liste tous les enfants. */
+/** Tous les enfants (admin et matrice). */
 export function useChildren() {
+  return useQuery({ queryKey: CHILDREN_KEY, queryFn: listChildren })
+}
+
+/** Mes enfants — liaison par l'email du compte. */
+export function useMyChildren() {
+  const { profile } = useAuth()
+  const email = profile?.email ?? ''
   return useQuery({
-    queryKey: CHILDREN_KEY,
-    queryFn: listChildren,
+    queryKey: [...CHILDREN_KEY, 'mine', email],
+    queryFn: () => listMyChildren(email),
+    enabled: !!email,
   })
 }
 
-/** Active / désactive un enfant. */
-export function useToggleChildActive() {
+function useInvalidateChildren() {
   const qc = useQueryClient()
+  return () => qc.invalidateQueries({ queryKey: CHILDREN_KEY })
+}
+
+export function useSaveChild() {
+  const invalidate = useInvalidateChildren()
+  return useMutation({
+    mutationFn: ({ id, input }: { id?: string; input: ChildInput }) =>
+      id ? updateChild(id, input).then(() => id) : createChild(input),
+    onSuccess: invalidate,
+  })
+}
+
+export function useSaveChildAddresses() {
+  const invalidate = useInvalidateChildren()
+  return useMutation({
+    mutationFn: ({ id, addresses }: { id: string; addresses: ChildAddresses }) =>
+      updateChildAddresses(id, addresses),
+    onSuccess: invalidate,
+  })
+}
+
+export function useToggleChildActive() {
+  const invalidate = useInvalidateChildren()
   return useMutation({
     mutationFn: ({ id, active }: { id: string; active: boolean }) =>
       setChildActive(id, active),
-    onSuccess: () => qc.invalidateQueries({ queryKey: CHILDREN_KEY }),
+    onSuccess: invalidate,
   })
 }

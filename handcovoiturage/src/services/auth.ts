@@ -1,95 +1,80 @@
 import {
   signInWithEmailAndPassword,
   signInWithPopup,
-  createUserWithEmailAndPassword,
   sendPasswordResetEmail,
   signOut as fbSignOut,
-  updateProfile,
+  type User as FbUser,
 } from 'firebase/auth'
-import {
-  doc,
-  getDoc,
-  serverTimestamp,
-  setDoc,
-  updateDoc,
-} from 'firebase/firestore'
+import { doc, getDoc, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore'
 import { auth, db, googleProvider } from './firebase'
+import { listMyChildren } from './children'
 import type { User } from '../types'
 
-/** Connexion email / mot de passe */
 export async function signInWithEmail(email: string, password: string) {
   const cred = await signInWithEmailAndPassword(auth, email, password)
   return cred.user
 }
 
-/** Connexion Google OAuth */
 export async function signInWithGoogle() {
   const cred = await signInWithPopup(auth, googleProvider)
-  await ensureUserDoc(cred.user.uid, {
-    email: cred.user.email ?? '',
-    displayName: cred.user.displayName ?? '',
-  })
   return cred.user
 }
 
-/** Création d'un compte email / mot de passe */
-export async function registerWithEmail(
-  email: string,
-  password: string,
-  displayName: string,
-) {
-  const cred = await createUserWithEmailAndPassword(auth, email, password)
-  if (displayName) await updateProfile(cred.user, { displayName })
-  await ensureUserDoc(cred.user.uid, { email, displayName })
-  return cred.user
-}
-
-/** Envoi d'un email de réinitialisation de mot de passe */
 export async function resetPassword(email: string) {
   await sendPasswordResetEmail(auth, email)
 }
 
-/** Déconnexion */
 export async function signOut() {
   await fbSignOut(auth)
 }
 
-/** Récupère le profil Firestore d'un utilisateur */
 export async function getUserProfile(uid: string): Promise<User | null> {
   const snap = await getDoc(doc(db, 'users', uid))
   return snap.exists() ? (snap.data() as User) : null
 }
 
-/** Met à jour les informations modifiables du profil. */
-export async function updateUserProfile(
-  uid: string,
-  data: { displayName?: string; phone?: string },
-): Promise<void> {
+export async function updateDisplayName(uid: string, displayName: string) {
   await updateDoc(doc(db, 'users', uid), {
-    ...(data.displayName !== undefined ? { displayName: data.displayName } : {}),
-    ...(data.phone !== undefined ? { phone: data.phone } : {}),
+    displayName: displayName.trim(),
     updatedAt: serverTimestamp(),
   })
 }
 
 /**
- * Crée le document users/{uid} s'il n'existe pas encore.
- * Le rôle par défaut est 'driver' ; l'admin lie ensuite l'enfant.
+ * Garantit l'existence de users/{uid} à chaque connexion (email ou Google).
+ * Le prénom est pris, dans l'ordre : profil existant, fiche enfant (CSV),
+ * prénom Google. Le rôle par défaut est 'parent'.
  */
-async function ensureUserDoc(
-  uid: string,
-  data: { email: string; displayName: string },
-) {
-  const ref = doc(db, 'users', uid)
+export async function ensureUserDoc(fbUser: FbUser): Promise<User> {
+  const email = (fbUser.email ?? '').toLowerCase()
+  const ref = doc(db, 'users', fbUser.uid)
   const snap = await getDoc(ref)
-  if (snap.exists()) return
-  await setDoc(ref, {
-    uid,
-    email: data.email,
-    displayName: data.displayName,
-    role: 'driver',
-    childId: '',
-    createdAt: serverTimestamp(),
-    updatedAt: serverTimestamp(),
-  })
+
+  if (snap.exists() && snap.get('displayName')) {
+    return snap.data() as User
+  }
+
+  let displayName = ''
+  try {
+    const kids = await listMyChildren(email)
+    displayName =
+      kids.flatMap((k) => k.parents).find((p) => p.email === email)?.firstName ?? ''
+  } catch {
+    // Pas bloquant : on retombe sur le prénom Google.
+  }
+  if (!displayName) displayName = (fbUser.displayName ?? '').split(' ')[0]
+
+  if (snap.exists()) {
+    await updateDoc(ref, { displayName, updatedAt: serverTimestamp() })
+  } else {
+    await setDoc(ref, {
+      uid: fbUser.uid,
+      email,
+      displayName,
+      role: 'parent',
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    })
+  }
+  return (await getDoc(ref)).data() as User
 }

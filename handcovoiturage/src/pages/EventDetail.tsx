@@ -1,57 +1,28 @@
-import { useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import {
-  ArrowLeft,
-  Clock,
-  MapPin,
-  HandHelping,
-  Car,
-  Lock,
-} from 'lucide-react'
+import { ArrowLeft, Lock } from 'lucide-react'
 import { useEvent } from '../hooks/useEvents'
-import { useChildren } from '../hooks/useChildren'
+import { useMyChildren } from '../hooks/useChildren'
 import { useEventBoard } from '../hooks/useEventBoard'
+import { useConfig } from '../hooks/useConfig'
 import { useAuth } from '../hooks/useAuth'
-import { RideBoard } from '../components/rides/RideBoard'
-import { NeedFormModal } from '../components/rides/NeedFormModal'
-import { OfferFormModal } from '../components/rides/OfferFormModal'
-import {
-  EventStatusBadge,
-  EventTypeBadge,
-} from '../components/ui/StatusBadge'
-import { Spinner } from '../components/ui/Spinner'
-import { formatDayMonth, formatTime, isEventEditable } from '../utils/dates'
-import type { Child, RideDirection } from '../types'
+import { MyChildrenBlock } from '../components/board/MyChildrenBlock'
+import { MyCarBlock } from '../components/board/MyCarBlock'
+import { CarMatrix } from '../components/board/CarMatrix'
+import { EventSummary } from '../components/events/EventSummary'
+import { EventStatusBadge, EventTypeBadge } from '../components/ui/StatusBadge'
+import { PageSpinner } from '../components/ui/Spinner'
+import { isEventEditable, isEventPast } from '../utils/dates'
 
 export default function EventDetail() {
   const { id } = useParams()
   const { profile } = useAuth()
-  const { data: event, isLoading: loadingEvent } = useEvent(id)
-  const { data: children } = useChildren()
-  const { needs, offers, rides, loading: loadingBoard } = useEventBoard(id)
+  const { data: event, isLoading } = useEvent(id)
+  const { data: myChildren } = useMyChildren()
+  const { data: config } = useConfig()
+  const { participants, cars, loading: loadingBoard, error } = useEventBoard(id)
 
-  const [tab, setTab] = useState<RideDirection>('outbound')
-  const [needOpen, setNeedOpen] = useState(false)
-  const [offerOpen, setOfferOpen] = useState(false)
-
-  const childById = useMemo(() => {
-    const m = new Map<string, Child>()
-    ;(children ?? []).forEach((c) => m.set(c.id, c))
-    return m
-  }, [children])
-
-  const myChild = profile?.childId
-    ? childById.get(profile.childId)
-    : undefined
-
-  if (loadingEvent) {
-    return (
-      <div className="flex justify-center py-12">
-        <Spinner />
-      </div>
-    )
-  }
-  if (!event) {
+  if (isLoading) return <PageSpinner />
+  if (!event || !profile) {
     return (
       <div className="card py-12 text-center text-sm text-slate-400">
         Événement introuvable.
@@ -65,10 +36,12 @@ export default function EventDetail() {
   }
 
   const editable = isEventEditable(event)
+  const past = isEventPast(event)
   const hasReturn = !!event.returnTime
+  const myCar = cars.find((c) => c.id === profile.uid)
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <Link
         to="/planning"
         className="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-primary"
@@ -77,110 +50,63 @@ export default function EventDetail() {
         Planning
       </Link>
 
-      {/* En-tête événement */}
-      <header className="card space-y-2">
+      <header className={`card space-y-2 ${past ? 'opacity-70' : ''}`}>
         <div className="flex flex-wrap items-center gap-2">
           <EventTypeBadge type={event.type} />
-          <EventStatusBadge status={event.status} />
+          <EventStatusBadge status={event.status} past={past} />
           {!editable && (
             <span className="badge inline-flex items-center gap-1 bg-slate-100 text-slate-500">
               <Lock className="h-3 w-3" />
-              Modifications fermées
+              Lecture seule
             </span>
           )}
         </div>
         <h1 className="text-xl font-bold text-secondary">{event.title}</h1>
-        <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-slate-500">
-          <span className="capitalize">{formatDayMonth(event.date)}</span>
-          <span className="flex items-center gap-1">
-            <Clock className="h-4 w-4" />
-            {formatTime(event.departureTime)}
-            {event.returnTime ? ` → ${formatTime(event.returnTime)}` : ''}
-          </span>
-          {event.location.name && (
-            <span className="flex items-center gap-1">
-              <MapPin className="h-4 w-4" />
-              {event.location.name}
-              {event.location.city ? `, ${event.location.city}` : ''}
-            </span>
-          )}
-        </div>
+        <EventSummary event={event} size="md" />
       </header>
 
-      {/* Actions de déclaration */}
-      {editable && myChild && (
-        <div className="flex flex-wrap gap-2">
-          <button onClick={() => setNeedOpen(true)} className="btn-secondary">
-            <HandHelping className="h-4 w-4" />
-            Déclarer un besoin
-          </button>
-          <button onClick={() => setOfferOpen(true)} className="btn-primary">
-            <Car className="h-4 w-4" />
-            Proposer ma voiture
-          </button>
-        </div>
-      )}
-      {editable && !myChild && (
-        <p className="rounded-lg bg-amber-50 p-3 text-sm text-amber-800">
-          Aucun enfant n'est rattaché à votre compte. Contactez un
-          administrateur pour participer au covoiturage.
+      {error && (
+        <p className="rounded-lg bg-red-50 p-3 text-sm text-red-700">
+          Impossible de charger le covoiturage : {error.message}
         </p>
       )}
 
-      {/* Onglets direction */}
-      {hasReturn && (
-        <div className="flex gap-1 rounded-lg bg-slate-100 p-1">
-          {(['outbound', 'return'] as RideDirection[]).map((d) => (
-            <button
-              key={d}
-              onClick={() => setTab(d)}
-              className={`flex-1 rounded-md px-3 py-2 text-sm font-medium transition ${
-                tab === d
-                  ? 'bg-white text-secondary shadow-sm'
-                  : 'text-slate-500'
-              }`}
-            >
-              {d === 'outbound' ? 'Aller' : 'Retour'}
-            </button>
-          ))}
-        </div>
-      )}
-
-      {/* Tableau collaboratif */}
       {loadingBoard ? (
-        <div className="flex justify-center py-12">
-          <Spinner />
-        </div>
+        <PageSpinner />
       ) : (
-        <RideBoard
-          eventId={event.id}
-          direction={hasReturn ? tab : 'outbound'}
-          needs={needs}
-          offers={offers}
-          rides={rides}
-          childById={childById}
-          editable={editable}
-        />
-      )}
-
-      {/* Modales */}
-      {myChild && (
         <>
-          <NeedFormModal
-            open={needOpen}
-            onClose={() => setNeedOpen(false)}
-            eventId={event.id}
-            child={myChild}
-            declaredByUid={profile!.uid}
-            allowReturn={hasReturn}
-          />
-          <OfferFormModal
-            open={offerOpen}
-            onClose={() => setOfferOpen(false)}
-            eventId={event.id}
-            child={myChild}
-            driverUid={profile!.uid}
-            allowReturn={hasReturn}
+          {editable && (
+            <div className="grid gap-4 md:grid-cols-2">
+              <MyChildrenBlock
+                eventId={event.id}
+                uid={profile.uid}
+                children={myChildren ?? []}
+                participants={participants}
+                cars={cars}
+                hasReturn={hasReturn}
+                editable={editable}
+              />
+              <MyCarBlock
+                eventId={event.id}
+                driver={{
+                  uid: profile.uid,
+                  name: profile.displayName || 'Chauffeur',
+                  children: myChildren ?? [],
+                }}
+                myCar={myCar}
+                participants={participants}
+                hasReturn={hasReturn}
+                editable={editable}
+              />
+            </div>
+          )}
+
+          <CarMatrix
+            event={event}
+            participants={participants}
+            cars={cars}
+            editable={editable}
+            threshold={config?.carWarningThreshold ?? 5}
           />
         </>
       )}

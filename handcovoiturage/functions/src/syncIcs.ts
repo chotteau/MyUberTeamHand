@@ -4,60 +4,68 @@ import { FieldValue, Timestamp } from 'firebase-admin/firestore'
 import { db } from './lib/admin.js'
 import { parseIcs, type ParsedIcsEvent } from './lib/icsParser.js'
 
-/** Met à 00:00 (heure locale serveur) le début de journée. */
-function startOfDay(d: Date): Date {
-  const c = new Date(d)
-  c.setHours(0, 0, 0, 0)
-  return c
+/** Minuit Europe/Paris du jour de la date (les Functions tournent en UTC). */
+function startOfParisDay(d: Date): Date {
+  const parts = new Intl.DateTimeFormat('fr-FR', {
+    timeZone: 'Europe/Paris',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(d)
+  const get = (t: string) => Number(parts.find((p) => p.type === t)?.value)
+  // Minuit Paris = 22:00 ou 23:00 UTC la veille selon l'heure d'été.
+  const utcMidnight = Date.UTC(get('year'), get('month') - 1, get('day'))
+  const offsetMs = parisOffsetMinutes(new Date(utcMidnight)) * 60_000
+  return new Date(utcMidnight - offsetMs)
 }
 
-interface SyncResult {
+function parisOffsetMinutes(d: Date): number {
+  const s = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Europe/Paris',
+    timeZoneName: 'shortOffset',
+  })
+    .formatToParts(d)
+    .find((p) => p.type === 'timeZoneName')?.value // "GMT+2"
+  const m = /GMT([+-]\d+)/.exec(s ?? '')
+  return m ? Number(m[1]) * 60 : 0
+}
+
+export interface SyncResult {
   created: number
   updated: number
   cancelled: number
 }
 
 /**
- * Réconcilie le flux ICS FFHB avec la collection `events`.
- * - icsUid déjà connu → mise à jour si changement
- * - icsUid nouveau → création
- * - event FFHB en base absent du flux → marqué `cancelled`
+ * Réconcilie le flux FFHB avec `events` :
+ * - nouveau UID → création ;
+ * - UID connu → maj titre/heures/lieu SANS toucher `status` ;
+ * - match FUTUR absent du flux → 'cancelled' (seulement si le flux n'est pas vide).
  */
-export async function reconcileIcs(
-  parsed: ParsedIcsEvent[],
-): Promise<SyncResult> {
+export async function reconcileIcs(parsed: ParsedIcsEvent[]): Promise<SyncResult> {
   const result: SyncResult = { created: 0, updated: 0, cancelled: 0 }
-
-  // Index des events FFHB existants par icsUid.
-  const snap = await db
-    .collection('events')
-    .where('source', '==', 'ics_ffhb')
-    .get()
-
-  const existingByUid = new Map<string, FirebaseFirestore.QueryDocumentSnapshot>()
-  for (const doc of snap.docs) {
-    const uid = doc.get('icsUid') as string | undefined
-    if (uid) existingByUid.set(uid, doc)
+  if (parsed.length === 0) {
+    logger.warn('Flux ICS vide : aucune modification')
+    return result
   }
 
-  const seenUids = new Set<string>()
+  const snap = await db.collection('events').where('source', '==', 'ics_ffhb').get()
+  const existingByUid = new Map<string, FirebaseFirestore.QueryDocumentSnapshot>()
+  for (const d of snap.docs) {
+    const uid = d.get('icsUid') as string | undefined
+    if (uid) existingByUid.set(uid, d)
+  }
 
+  const seen = new Set<string>()
   for (const ev of parsed) {
-    seenUids.add(ev.icsUid)
-    const day = startOfDay(ev.start)
-
+    seen.add(ev.icsUid)
     const payload = {
       type: 'match' as const,
       title: ev.title,
-      date: Timestamp.fromDate(day),
+      date: Timestamp.fromDate(startOfParisDay(ev.start)),
       departureTime: Timestamp.fromDate(ev.start),
       ...(ev.end ? { returnTime: Timestamp.fromDate(ev.end) } : {}),
-      location: {
-        name: ev.locationName,
-        address: ev.locationAddress,
-        city: ev.locationCity,
-      },
-      status: 'scheduled' as const,
+      location: { name: ev.locationName, address: ev.locationAddress, city: ev.locationCity },
       source: 'ics_ffhb' as const,
       icsUid: ev.icsUid,
       updatedAt: FieldValue.serverTimestamp(),
@@ -67,72 +75,50 @@ export async function reconcileIcs(
     if (!existing) {
       await db.collection('events').add({
         ...payload,
+        status: 'scheduled',
         createdAt: FieldValue.serverTimestamp(),
       })
       result.created++
-    } else {
-      // Mise à jour seulement si un champ pertinent a changé.
-      const before = existing.data()
-      const changed =
-        before.title !== payload.title ||
-        (before.departureTime as Timestamp)?.toMillis?.() !==
-          payload.departureTime.toMillis() ||
-        before.location?.name !== payload.location.name ||
-        before.status === 'cancelled'
-      if (changed) {
-        await existing.ref.set(payload, { merge: true })
-        result.updated++
-      }
+      continue
+    }
+    const before = existing.data()
+    const changed =
+      before.title !== payload.title ||
+      (before.departureTime as Timestamp)?.toMillis?.() !== payload.departureTime.toMillis() ||
+      before.location?.name !== payload.location.name
+    if (changed) {
+      await existing.ref.set(payload, { merge: true })
+      result.updated++
     }
   }
 
-  // Events FFHB en base absents du flux → annulés.
-  for (const [uid, doc] of existingByUid) {
-    if (!seenUids.has(uid) && doc.get('status') !== 'cancelled') {
-      await doc.ref.set(
-        { status: 'cancelled', updatedAt: FieldValue.serverTimestamp() },
-        { merge: true },
-      )
-      result.cancelled++
-    }
+  const now = Timestamp.now()
+  for (const [uid, d] of existingByUid) {
+    if (seen.has(uid)) continue
+    if (d.get('status') !== 'scheduled') continue
+    if ((d.get('departureTime') as Timestamp).toMillis() < now.toMillis()) continue
+    await d.ref.set({ status: 'cancelled', updatedAt: FieldValue.serverTimestamp() }, { merge: true })
+    result.cancelled++
   }
-
   return result
 }
 
-/** Récupère l'URL ICS depuis config/app, fetch, parse, réconcilie. */
 export async function runIcsSync(): Promise<SyncResult> {
-  const configSnap = await db.doc('config/app').get()
-  const icsUrl = configSnap.get('icsUrl') as string | undefined
+  const icsUrl = (await db.doc('config/app').get()).get('icsUrl') as string | undefined
   if (!icsUrl) {
     logger.warn('Aucune URL ICS configurée (config/app.icsUrl)')
     return { created: 0, updated: 0, cancelled: 0 }
   }
-
   const res = await fetch(icsUrl)
-  if (!res.ok) {
-    throw new Error(`Échec fetch ICS: ${res.status} ${res.statusText}`)
-  }
-  const text = await res.text()
-  const parsed = parseIcs(text)
-  const result = await reconcileIcs(parsed)
-
-  await db.doc('config/app').set(
-    { icsLastSync: FieldValue.serverTimestamp() },
-    { merge: true },
-  )
-
-  logger.info('Sync ICS terminée', { ...result, total: parsed.length })
+  if (!res.ok) throw new Error(`Échec fetch ICS: ${res.status} ${res.statusText}`)
+  const result = await reconcileIcs(parseIcs(await res.text()))
+  await db.doc('config/app').set({ icsLastSync: FieldValue.serverTimestamp() }, { merge: true })
+  logger.info('Sync ICS terminée', result)
   return result
 }
 
-/** Cron : synchronise le flux ICS FFHB toutes les 24h (03:00 Europe/Paris). */
 export const syncIcs = onSchedule(
-  {
-    schedule: 'every day 03:00',
-    timeZone: 'Europe/Paris',
-    region: 'europe-west1',
-  },
+  { schedule: 'every day 03:00', timeZone: 'Europe/Paris', region: 'europe-west1' },
   async () => {
     await runIcsSync()
   },

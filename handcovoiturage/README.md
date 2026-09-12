@@ -1,73 +1,38 @@
-# React + TypeScript + Vite
+# HandCovoiturage
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Covoiturage collaboratif pour une équipe de handball jeunes — React + TypeScript + Firebase.
 
-Currently, two official plugins are available:
+- **Parents** : inscrivent leur enfant (aller / retour, adresse du jour), déclarent « j'emmène » /
+  « je ramène », et remplissent la matrice enfants × voitures. Tout le monde peut déplacer n'importe
+  quel enfant ; seul le chauffeur gère sa voiture, seul le parent gère son enfant.
+- **Admin** : familles (import CSV), entraînements générés sur la saison, matchs FFHB synchronisés,
+  configuration.
+- **Sortie** : un calendrier partagé (ICS) dont chaque événement décrit qui emmène / ramène qui.
+  Aucun email applicatif.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+Spécifications : [`../SPECS.md`](../SPECS.md) · Conventions : [`../CLAUDE.md`](../CLAUDE.md) ·
+Déploiement : [`DEPLOYMENT.md`](DEPLOYMENT.md)
 
-## React Compiler
+## Développement
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+npm install
+cp .env.local.example .env.local   # clés Firebase (VITE_FIREBASE_*)
+npm run dev                        # http://localhost:5173
+npm run lint && npm run build
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+Émulateurs + données de test :
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
-
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+firebase emulators:start
+npm run seed                       # admin@hand.fr / password123, parents jean@, sophie@… / password123
 ```
+
+## Format CSV familles
+
+```
+prenom_enfant;prenom_parent1;email_parent1;adresse1_rue;adresse1_cp;adresse1_ville;label_adresse1;prenom_parent2;email_parent2;adresse2_rue;adresse2_cp;adresse2_ville;label_adresse2
+```
+
+Pas de nom de famille, pas de téléphone. `adresse2` = adresse secondaire (parents séparés), vide sinon.

@@ -8,38 +8,27 @@ import { Spinner } from '../components/ui/Spinner'
 export default function Login() {
   const navigate = useNavigate()
   const location = useLocation()
-  const from =
-    (location.state as { from?: { pathname: string } })?.from?.pathname ?? '/'
+  const from = (location.state as { from?: { pathname: string } })?.from?.pathname ?? '/'
 
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
 
-  async function handleSubmit(e: FormEvent) {
-    e.preventDefault()
+  async function run(fn: () => Promise<unknown>, errorMsg: string) {
     setLoading(true)
     try {
-      await signInWithEmail(email, password)
-      toast.success('Connexion réussie')
+      await fn()
       navigate(from, { replace: true })
     } catch {
-      toast.error('Email ou mot de passe incorrect')
+      toast.error(errorMsg)
     } finally {
       setLoading(false)
     }
   }
 
-  async function handleGoogle() {
-    setLoading(true)
-    try {
-      await signInWithGoogle()
-      toast.success('Connexion réussie')
-      navigate(from, { replace: true })
-    } catch {
-      toast.error('Échec de la connexion Google')
-    } finally {
-      setLoading(false)
-    }
+  function handleSubmit(e: FormEvent) {
+    e.preventDefault()
+    void run(() => signInWithEmail(email, password), 'Email ou mot de passe incorrect')
   }
 
   return (
@@ -50,16 +39,12 @@ export default function Login() {
             🤾
           </div>
           <h1 className="text-2xl font-bold text-secondary">HandCovoiturage</h1>
-          <p className="mt-1 text-sm text-slate-500">
-            Organisez les trajets de l'équipe
-          </p>
+          <p className="mt-1 text-sm text-slate-500">Organisez les trajets de l'équipe</p>
         </div>
 
         <form onSubmit={handleSubmit} className="card space-y-4">
           <div>
-            <label className="mb-1 block text-sm font-medium text-slate-700">
-              Email
-            </label>
+            <label className="mb-1 block text-sm font-medium text-slate-700">Email</label>
             <input
               type="email"
               required
@@ -71,9 +56,7 @@ export default function Login() {
             />
           </div>
           <div>
-            <label className="mb-1 block text-sm font-medium text-slate-700">
-              Mot de passe
-            </label>
+            <label className="mb-1 block text-sm font-medium text-slate-700">Mot de passe</label>
             <input
               type="password"
               required
@@ -84,12 +67,7 @@ export default function Login() {
               placeholder="••••••••"
             />
           </div>
-
-          <button
-            type="submit"
-            disabled={loading}
-            className="btn-primary w-full"
-          >
+          <button type="submit" disabled={loading} className="btn-primary w-full">
             {loading ? <Spinner className="h-4 w-4 text-white" /> : <LogIn className="h-4 w-4" />}
             Se connecter
           </button>
@@ -103,11 +81,16 @@ export default function Login() {
 
         <button
           type="button"
-          onClick={handleGoogle}
+          onClick={() => run(signInWithGoogle, 'Échec de la connexion Google')}
           disabled={loading}
           className="btn w-full border border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
         >
-          <img src="https://www.google.com/favicon.ico" alt="" className="h-4 w-4" />
+          <svg className="h-4 w-4" viewBox="0 0 24 24" aria-hidden="true">
+            <path fill="#4285F4" d="M23.5 12.3c0-.8-.1-1.6-.2-2.3H12v4.4h6.5c-.3 1.5-1.1 2.7-2.4 3.6v3h3.9c2.3-2.1 3.5-5.2 3.5-8.7z" />
+            <path fill="#34A853" d="M12 24c3.2 0 6-1.1 8-2.9l-3.9-3c-1.1.7-2.5 1.2-4.1 1.2-3.1 0-5.8-2.1-6.7-5H1.3v3.1C3.3 21.3 7.3 24 12 24z" />
+            <path fill="#FBBC05" d="M5.3 14.3c-.5-1.5-.5-3.1 0-4.6V6.6H1.3c-1.7 3.4-1.7 7.4 0 10.8l4-3.1z" />
+            <path fill="#EA4335" d="M12 4.7c1.7 0 3.3.6 4.5 1.8l3.4-3.4C17.9 1.2 15.1 0 12 0 7.3 0 3.3 2.7 1.3 6.6l4 3.1c.9-2.9 3.6-5 6.7-5z" />
+          </svg>
           Continuer avec Google
         </button>
 
@@ -115,6 +98,9 @@ export default function Login() {
           <Link to="/reset-password" className="text-primary hover:underline">
             Mot de passe oublié ?
           </Link>
+        </p>
+        <p className="mt-2 text-center text-xs text-slate-400">
+          Utilisez l'email communiqué au club : vos enfants y sont automatiquement associés.
         </p>
       </div>
     </div>

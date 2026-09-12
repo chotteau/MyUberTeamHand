@@ -1,4 +1,4 @@
-import { format, formatRelative, isAfter } from 'date-fns'
+import { format, isAfter } from 'date-fns'
 import { fr } from 'date-fns/locale'
 import { Timestamp } from 'firebase/firestore'
 import type { Event } from '../types'
@@ -23,26 +23,50 @@ export function formatTime(value: Timestamp | Date): string {
   return format(toDate(value), 'HH:mm', { locale: fr })
 }
 
-/** Ex: "demain à 17:15" */
-export function formatRelativeDate(value: Timestamp | Date): string {
-  return formatRelative(toDate(value), new Date(), { locale: fr })
+/** Ex: "12/09 à 14:32" */
+export function formatShortDateTime(value: Timestamp | Date): string {
+  return format(toDate(value), "dd/MM 'à' HH:mm", { locale: fr })
+}
+
+/** Un événement est passé dès que son heure de départ est dépassée. */
+export function isEventPast(event: Pick<Event, 'departureTime'>): boolean {
+  return !isAfter(toDate(event.departureTime), new Date())
 }
 
 /**
- * Un événement est modifiable tant que son heure de départ n'est pas dépassée.
- * Règle métier critique : aucune modification après l'heure H.
+ * Règle métier 8 : modifiable uniquement si programmé et pas encore passé.
+ * Les statuts 'cancelled' et 'vacances' sont figés.
  */
-export function isEventEditable(event: Pick<Event, 'departureTime' | 'status'>): boolean {
-  if (event.status === 'cancelled' || event.status === 'completed') return false
-  return isAfter(toDate(event.departureTime), new Date())
+export function isEventEditable(
+  event: Pick<Event, 'departureTime' | 'status'>,
+): boolean {
+  return event.status === 'scheduled' && !isEventPast(event)
 }
 
-/**
- * Combine une date (jour) et une heure "HH:mm" en un objet Date.
- */
+/** Combine un jour et une heure "HH:mm" en Date locale. */
 export function combineDateAndTime(day: Date, time: string): Date {
   const [hours, minutes] = time.split(':').map(Number)
   const d = new Date(day)
   d.setHours(hours, minutes, 0, 0)
   return d
+}
+
+/** "YYYY-MM-DD" (input type=date) → Date locale à minuit. */
+export function parseDateInput(value: string): Date {
+  return new Date(`${value}T00:00:00`)
+}
+
+/** Date → "YYYY-MM-DD" local (input type=date). */
+export function toDateInput(value?: Timestamp | Date): string {
+  return value ? format(toDate(value), 'yyyy-MM-dd') : ''
+}
+
+/** Date → "HH:mm" local (input type=time). */
+export function toTimeInput(value?: Timestamp | Date): string {
+  return value ? format(toDate(value), 'HH:mm') : ''
+}
+
+/** Date locale → "YYYY-MM-DD" sans passer par l'UTC (ids d'entraînement). */
+export function localIsoDay(d: Date): string {
+  return format(d, 'yyyy-MM-dd')
 }

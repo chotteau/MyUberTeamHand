@@ -8,3 +8,12 @@ export function Spinner({ className = '' }: { className?: string }) {
     />
   )
 }
+
+/** Spinner centré pour une page ou une section en chargement. */
+export function PageSpinner() {
+  return (
+    <div className="flex justify-center py-12">
+      <Spinner />
+    </div>
+  )
+}

@@ -4,37 +4,35 @@ import type { Timestamp } from 'firebase/firestore'
 // Énumérations & alias
 // ---------------------------------------------------------------------------
 
-export type Role = 'admin' | 'driver'
-export type Direction = 'outbound' | 'return' | 'both'
-export type RideDirection = 'outbound' | 'return'
+export type Role = 'admin' | 'parent'
+/** Direction d'un trajet. Aller et retour sont indépendants. */
+export type Direction = 'aller' | 'retour'
+export const DIRECTIONS: Direction[] = ['aller', 'retour']
 export type EventType = 'training' | 'match'
-export type EventStatus = 'scheduled' | 'cancelled' | 'vacances' | 'completed'
-// 'cancelled' → annulé (raison quelconque)
-// 'vacances'  → annulé car vacances scolaires
-// 'completed' → passé — figé, alimente les stats, non modifiable
+/**
+ * 'cancelled' → annulé (raison quelconque)
+ * 'vacances'  → annulé car vacances scolaires
+ * Un événement passé n'a pas de statut : il est dérivé (departureTime < now).
+ */
+export type EventStatus = 'scheduled' | 'cancelled' | 'vacances'
 export type EventSource = 'manual' | 'ics_ffhb' | 'generated'
-// 'generated' → entraînement auto-généré depuis la config saison
-export type NeedStatus = 'pending' | 'assigned' | 'cancelled'
-export type OfferStatus = 'open' | 'full' | 'cancelled'
-export type RideStatus = 'draft' | 'confirmed' | 'completed' | 'cancelled'
-export type NotificationType =
-  | 'reminder'
-  | 'missing_driver'
-  | 'assignment_confirmed'
-  | 'schedule_change'
-export type NotificationStatus = 'pending' | 'sent' | 'failed'
+/** 'custom' = adresse saisie à la main pour ce trajet, non enregistrée sur la fiche. */
+export type TripAddressKind = 'default' | 'secondary' | 'custom'
 
 // ---------------------------------------------------------------------------
 // Sous-objets
 // ---------------------------------------------------------------------------
 
 export interface Address {
-  id: string
-  label: string // ex: "Chez Papa", "Chez Maman", "Domicile"
+  label: string // "Chez Papa", "Domicile"…
   street: string
-  city: string
   zipCode: string
-  parentUid: string // à quel parent appartient cette adresse
+  city: string
+}
+
+/** Adresse snapshotée sur une participation à un trajet. */
+export interface TripAddress extends Address {
+  kind: TripAddressKind
 }
 
 export interface EventLocation {
@@ -43,22 +41,22 @@ export interface EventLocation {
   city: string
 }
 
-export interface Passenger {
-  childId: string
-  needId: string
-  pickupAddress: string // snapshot de l'adresse complète
-  confirmedAt?: Timestamp
+export interface ChildParent {
+  firstName: string
+  email: string // minuscules
 }
 
-/**
- * Un jour d'entraînement configurable.
- * Exactement 2 entrées dans config.trainingDays.
- */
+export interface ChildAddresses {
+  default: Address
+  secondary?: Address
+}
+
+/** Un jour d'entraînement configurable (exactement 2 dans config.trainingDays). */
 export interface TrainingDay {
-  dayOfWeek: 0 | 1 | 2 | 3 | 4 | 5 | 6 // 1=Lundi…0=Dimanche (getDay())
-  label: string        // ex: "Lundi soir", "Vendredi"
-  departureTime: string // "HH:mm" heure départ aller
-  returnTime: string    // "HH:mm" heure départ retour
+  dayOfWeek: 0 | 1 | 2 | 3 | 4 | 5 | 6 // getDay() : 0 = dimanche
+  label: string
+  departureTime: string // "HH:mm"
+  returnTime: string // "HH:mm"
   location: EventLocation
 }
 
@@ -69,21 +67,21 @@ export interface TrainingDay {
 export interface User {
   uid: string
   email: string
-  displayName: string  // prénom seul ou "Prénom I" si ambiguïté — pas de nom complet
+  displayName: string // prénom seul
   role: Role
-  childId: string      // référence → children/{id}
   createdAt: Timestamp
   updatedAt: Timestamp
 }
 
 export interface Child {
   id: string
-  firstName: string    // prénom seul (ex: "Lucas") ou avec initiale (ex: "Lucas M")
-  // Pas de nom de famille stocké
-  parentIds: string[]  // 1 ou 2 UIDs — famille monoparentale supportée
-  addresses: Address[] // 1 adresse si parents même toit, 2 sinon
+  firstName: string // "Lucas" ou "Lucas M" — jamais de nom de famille
+  parents: ChildParent[] // 1 ou 2
+  parentEmails: string[] // dérivé — règles + requêtes
+  addresses: ChildAddresses
   active: boolean
   createdAt: Timestamp
+  updatedAt: Timestamp
 }
 
 export interface Event {
@@ -96,74 +94,42 @@ export interface Event {
   location: EventLocation
   status: EventStatus
   source: EventSource
-  icsUid?: string      // UID déduplication ICS FFHB
+  icsUid?: string
   createdAt: Timestamp
   updatedAt: Timestamp
 }
 
-export interface Need {
-  id: string
-  eventId: string
+/** events/{eventId}/participants/{childId} */
+export interface Participant {
   childId: string
-  declaredByUid: string
-  direction: Direction
-  pickupAddressId: string
-  dropoffAddressId?: string
-  status: NeedStatus
-  assignedRideId?: string
-  createdAt: Timestamp
+  childName: string
+  aller: TripAddress | null
+  retour: TripAddress | null
+  updatedBy: string
   updatedAt: Timestamp
 }
 
-export interface Offer {
-  id: string
-  eventId: string
+/** events/{eventId}/cars/{driverUid} */
+export interface Car {
+  id: string // = driverUid
   driverUid: string
-  childId: string      // enfant du chauffeur (toujours embarqué)
-  direction: Direction
-  vehicleCapacity: number // saisi au moment de la déclaration — non stocké sur la famille
-  // Places disponibles = vehicleCapacity - 1 (enfant du chauffeur)
-  // Calculé dynamiquement depuis les rides, JAMAIS stocké comme champ fixe
-  departureAddressId: string
-  status: OfferStatus
-  createdAt: Timestamp
-  updatedAt: Timestamp
-}
-
-export interface Ride {
-  id: string
-  eventId: string
-  offerId: string
-  driverUid: string
-  direction: RideDirection
-  passengers: Passenger[]
-  status: RideStatus
-  createdAt: Timestamp
+  driverName: string
+  driverChildIds: string[]
+  aller: boolean
+  retour: boolean
+  passengersAller: string[]
+  passengersRetour: string[]
   updatedAt: Timestamp
 }
 
 export interface AppConfig {
-  season: string           // ex: "2024-2025"
-  seasonStart: Timestamp   // 1er jour de la saison
-  seasonEnd: Timestamp     // dernier jour de la saison
-  // Le calendrier complet est généré entre seasonStart et seasonEnd.
-  // Affichage par défaut : 2 semaines glissantes.
-
-  trainingDays: TrainingDay[] // Exactement 2 jours configurables
+  season: string
+  seasonStart: Timestamp
+  seasonEnd: Timestamp
+  trainingDays: TrainingDay[]
   icsUrl: string
   icsLastSync?: Timestamp
-  reminderHoursBefore: number // défaut: 24
-  brevoApiKey: string
-  emailFrom: string
   calendarName: string
-}
-
-export interface Notification {
-  id: string
-  type: NotificationType
-  recipientUid: string
-  eventId: string
-  message: string
-  sentAt?: Timestamp
-  status: NotificationStatus
+  calendarToken: string
+  carWarningThreshold: number
 }

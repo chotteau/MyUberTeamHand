@@ -1,65 +1,39 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
+import { useMutation } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
-import {
-  User as UserIcon,
-  Mail,
-  Baby,
-  MapPin,
-  LogOut,
-  CalendarPlus,
-  Shield,
-} from 'lucide-react'
+import { User as UserIcon, Mail, Baby, LogOut, CalendarPlus, Shield, Pencil } from 'lucide-react'
 import { useAuth } from '../hooks/useAuth'
-import { useChildren } from '../hooks/useChildren'
-import { updateUserProfile, signOut } from '../services/auth'
+import { useMyChildren } from '../hooks/useChildren'
+import { useConfig } from '../hooks/useConfig'
+import { updateDisplayName, signOut } from '../services/auth'
 import { formatAddress } from '../utils/address'
-import { Spinner } from '../components/ui/Spinner'
-
-const CALENDAR_PATH = '/api/calendar/handcovoiturage.ics'
+import { Spinner, PageSpinner } from '../components/ui/Spinner'
+import { ChildAddressesModal } from '../components/admin/ChildFormModal'
+import type { Child } from '../types'
 
 export default function Profile() {
   const { profile, isAdmin, refreshProfile } = useAuth()
-  const { data: children } = useChildren()
-  const [displayName, setDisplayName] = useState('')
-  const [saving, setSaving] = useState(false)
+  const { data: myChildren } = useMyChildren()
+  const { data: config } = useConfig()
+  const [displayName, setDisplayName] = useState(profile?.displayName ?? '')
+  const [editing, setEditing] = useState<Child | null>(null)
 
-  useEffect(() => {
-    if (profile) {
-      setDisplayName(profile.displayName ?? '')
-    }
-  }, [profile])
-
-  const myChild = profile?.childId
-    ? (children ?? []).find((c) => c.id === profile.childId)
-    : undefined
-
-  async function handleSave() {
-    if (!profile) return
-    setSaving(true)
-    try {
-      await updateUserProfile(profile.uid, { displayName })
+  const save = useMutation({
+    mutationFn: () => updateDisplayName(profile!.uid, displayName),
+    onSuccess: async () => {
       await refreshProfile()
       toast.success('Profil mis à jour')
-    } catch {
-      toast.error('Échec de la mise à jour')
-    } finally {
-      setSaving(false)
-    }
-  }
+    },
+    onError: () => toast.error('Échec de la mise à jour'),
+  })
 
-  const calendarUrl =
-    (import.meta.env.VITE_APP_URL ?? window.location.origin) + CALENDAR_PATH
-  // webcal:// → Apple Calendrier / Outlook proposent « S'abonner » (et
-  // resynchronisent), au lieu d'un import ponctuel comme avec https://.
+  if (!profile) return <PageSpinner />
+
+  const base = (import.meta.env.VITE_APP_URL ?? window.location.origin).replace(/\/$/, '')
+  const calendarUrl = config?.calendarToken
+    ? `${base}/api/calendar/${config.calendarToken}.ics`
+    : ''
   const webcalUrl = calendarUrl.replace(/^https?:\/\//, 'webcal://')
-
-  if (!profile) {
-    return (
-      <div className="flex justify-center py-12">
-        <Spinner />
-      </div>
-    )
-  }
 
   return (
     <div className="space-y-6">
@@ -74,110 +48,111 @@ export default function Profile() {
         )}
       </h1>
 
-      {/* Coordonnées */}
       <section className="card space-y-4">
         <div>
-          <label className="mb-1 block text-sm font-medium text-slate-600">
-            Nom affiché
-          </label>
+          <label className="mb-1 block text-sm font-medium text-slate-600">Prénom affiché</label>
           <input
             className="input"
             value={displayName}
             onChange={(e) => setDisplayName(e.target.value)}
-            placeholder="Prénom Nom"
+            placeholder="Jean"
           />
+          <p className="mt-1 text-xs text-slate-400">En cas de doublon, ajoutez une initiale : « Jean M »</p>
         </div>
         <div className="flex items-center gap-2 text-sm text-slate-500">
           <Mail className="h-4 w-4" />
           {profile.email}
         </div>
         <button
-          onClick={handleSave}
+          onClick={() => save.mutate()}
           className="btn-primary w-full"
-          disabled={saving}
+          disabled={save.isPending || !displayName.trim()}
         >
-          {saving ? <Spinner /> : 'Enregistrer'}
+          {save.isPending ? <Spinner className="h-4 w-4 text-white" /> : 'Enregistrer'}
         </button>
       </section>
 
-      {/* Enfant rattaché */}
       <section className="card space-y-3">
         <h2 className="flex items-center gap-2 text-sm font-semibold text-slate-600">
           <Baby className="h-4 w-4 text-primary" />
-          Mon enfant
+          Mes enfants
         </h2>
-        {!myChild ? (
+        {!myChildren || myChildren.length === 0 ? (
           <p className="text-sm text-slate-400">
-            Aucun enfant rattaché à votre compte. Contactez un administrateur.
+            Aucun enfant associé à {profile.email}. Contactez un administrateur.
           </p>
         ) : (
-          <div className="space-y-2">
-            <div className="font-medium text-secondary">
-              {myChild.firstName}
-            </div>
-            {myChild.addresses.map((addr) => (
-              <div
-                key={addr.id}
-                className="flex items-start gap-2 rounded-lg bg-slate-50 p-2 text-sm"
-              >
-                <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
-                <div>
-                  <div className="font-medium">{addr.label}</div>
-                  <div className="text-slate-500">{formatAddress(addr)}</div>
-                </div>
+          myChildren.map((child) => (
+            <div key={child.id} className="rounded-lg bg-slate-50 p-3 text-sm">
+              <div className="flex items-center justify-between">
+                <span className="font-medium text-secondary">{child.firstName}</span>
+                <button
+                  onClick={() => setEditing(child)}
+                  className="btn-ghost !p-1 text-xs text-primary"
+                >
+                  <Pencil className="h-3 w-3" />
+                  Adresses
+                </button>
               </div>
-            ))}
-            <p className="text-xs text-slate-400">
-              Les adresses sont gérées par un administrateur.
-            </p>
-          </div>
+              <div className="mt-1 text-slate-500">
+                <span className="font-medium">{child.addresses.default.label}</span> —{' '}
+                {formatAddress(child.addresses.default)}
+              </div>
+              {child.addresses.secondary && (
+                <div className="text-slate-500">
+                  <span className="font-medium">{child.addresses.secondary.label}</span> —{' '}
+                  {formatAddress(child.addresses.secondary)}
+                </div>
+              )}
+            </div>
+          ))
         )}
       </section>
 
-      {/* Calendrier */}
       <section className="card space-y-3">
         <h2 className="flex items-center gap-2 text-sm font-semibold text-slate-600">
           <CalendarPlus className="h-4 w-4 text-primary" />
-          Calendrier des trajets
+          Calendrier partagé
         </h2>
-        <p className="text-sm text-slate-500">
-          Abonnez-vous à ce calendrier pour voir vos trajets se mettre à jour
-          automatiquement.
-        </p>
-
-        {/* Apple Calendrier / Outlook : abonnement direct via webcal:// */}
-        <a href={webcalUrl} className="btn-primary w-full">
-          <CalendarPlus className="h-4 w-4" />
-          S'abonner (Apple Calendrier / Outlook)
-        </a>
-
-        {/* Google Agenda : nécessite une URL https à coller manuellement */}
-        <p className="text-xs text-slate-500">
-          Google Agenda : « Autres agendas » → « À partir d'une URL » → collez
-          ce lien :
-        </p>
-        <code className="block overflow-x-auto rounded-lg bg-slate-100 p-2 text-xs text-slate-600">
-          {calendarUrl}
-        </code>
-        <button
-          onClick={() => {
-            navigator.clipboard.writeText(calendarUrl)
-            toast.success('Lien copié')
-          }}
-          className="btn-secondary w-full"
-        >
-          Copier le lien (https)
-        </button>
+        {!calendarUrl ? (
+          <p className="text-sm text-slate-400">
+            Le lien d'abonnement n'est pas encore généré (Admin → Config).
+          </p>
+        ) : (
+          <>
+            <p className="text-sm text-slate-500">
+              Abonnez-vous : chaque événement contient, dans ses notes, qui emmène
+              et ramène qui, et à quelle adresse.
+            </p>
+            <a href={webcalUrl} className="btn-primary w-full">
+              <CalendarPlus className="h-4 w-4" />
+              S'abonner (Apple Calendrier / Outlook)
+            </a>
+            <p className="text-xs text-slate-500">
+              Google Agenda : « Autres agendas » → « À partir d'une URL » → collez :
+            </p>
+            <code className="block overflow-x-auto rounded-lg bg-slate-100 p-2 text-xs text-slate-600">
+              {calendarUrl}
+            </code>
+            <button
+              onClick={() => {
+                navigator.clipboard.writeText(calendarUrl)
+                toast.success('Lien copié')
+              }}
+              className="btn-secondary w-full"
+            >
+              Copier le lien
+            </button>
+          </>
+        )}
       </section>
 
-      {/* Déconnexion */}
-      <button
-        onClick={() => signOut()}
-        className="btn-ghost w-full text-danger"
-      >
+      <button onClick={() => signOut()} className="btn-ghost w-full text-danger">
         <LogOut className="h-4 w-4" />
         Se déconnecter
       </button>
+
+      {editing && <ChildAddressesModal child={editing} onClose={() => setEditing(null)} />}
     </div>
   )
 }

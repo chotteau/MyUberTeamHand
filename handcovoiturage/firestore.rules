@@ -3,63 +3,68 @@ service cloud.firestore {
   match /databases/{database}/documents {
 
     function isAuth() { return request.auth != null; }
+    function email() { return request.auth.token.email.lower(); }
     function isAdmin() {
       return isAuth() &&
         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
     }
-    function isOwner(uid) { return isAuth() && request.auth.uid == uid; }
+    function isParentOf(childId) {
+      return email() in get(/databases/$(database)/documents/children/$(childId)).data.parentEmails;
+    }
+    function eventEditable(eventId) {
+      let ev = get(/databases/$(database)/documents/events/$(eventId)).data;
+      return ev.status == 'scheduled' && ev.departureTime > request.time;
+    }
+    function onlyKeys(keys) {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(keys);
+    }
 
     match /users/{uid} {
-      allow read, write: if isOwner(uid) || isAdmin();
+      allow read: if isAuth() && (request.auth.uid == uid || isAdmin());
+      allow create: if isAuth() && request.auth.uid == uid
+                    && request.resource.data.role == 'parent';
+      allow update: if isAdmin()
+                    || (isAuth() && request.auth.uid == uid
+                        && onlyKeys(['displayName', 'updatedAt']));
     }
 
     match /children/{childId} {
-      // Lecture ouverte à tout membre authentifié : le covoiturage est
-      // collaboratif (règle 7) — chaque parent doit voir les enfants à
-      // affecter et leur point de prise en charge. Écriture admin only.
       allow read: if isAuth();
-      allow write: if isAdmin();
+      allow create, delete: if isAdmin();
+      allow update: if isAdmin()
+                    || (isAuth() && email() in resource.data.parentEmails
+                        && onlyKeys(['addresses', 'updatedAt']));
     }
 
     match /events/{eventId} {
       allow read: if isAuth();
       allow write: if isAdmin();
-    }
 
-    match /needs/{needId} {
-      allow read: if isAuth();
-      allow create: if isAuth();
-      allow update, delete: if isAuth() &&
-        (isAdmin() || request.auth.uid == resource.data.declaredByUid);
-    }
+      // Inscription d'un enfant : ses parents uniquement (règle 5)
+      match /participants/{childId} {
+        allow read: if isAuth();
+        allow write: if isAdmin()
+                     || (isAuth() && isParentOf(childId) && eventEditable(eventId)
+                         && (request.method == 'delete'
+                             || request.resource.data.childId == childId));
+      }
 
-    match /offers/{offerId} {
-      allow read: if isAuth();
-      allow create: if isAuth();
-      allow update, delete: if isAuth() &&
-        (isAdmin() || request.auth.uid == resource.data.driverUid);
-    }
-
-    match /rides/{rideId} {
-      // Covoiturage collaboratif (règle 7) : tout membre authentifié peut
-      // créer un trajet et y affecter/retirer des enfants.
-      allow read: if isAuth();
-      allow create, update: if isAuth();
-      // Suppression réservée à l'admin ou au chauffeur du trajet.
-      allow delete: if isAuth() &&
-        (isAdmin() || request.auth.uid == resource.data.driverUid);
+      // Voiture : créée/supprimée par son chauffeur (règle 4) ;
+      // listes de passagers modifiables par tous (règle 6)
+      match /cars/{driverUid} {
+        allow read: if isAuth();
+        allow create, delete: if isAdmin()
+                     || (isAuth() && request.auth.uid == driverUid && eventEditable(eventId));
+        allow update: if isAdmin()
+                     || (isAuth() && eventEditable(eventId) && (
+                          request.auth.uid == driverUid
+                          || onlyKeys(['passengersAller', 'passengersRetour', 'updatedAt'])
+                        ));
+      }
     }
 
     match /config/{docId} {
-      allow read, write: if isAdmin();
-    }
-
-    match /invitations/{invId} {
-      allow read, write: if isAdmin();
-    }
-
-    match /notifications/{notifId} {
-      allow read: if isAuth() && request.auth.uid == resource.data.recipientUid;
+      allow read: if isAuth();
       allow write: if isAdmin();
     }
   }

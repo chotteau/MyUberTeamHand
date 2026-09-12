@@ -4,8 +4,8 @@
     "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
     "rewrites": [
       {
-        "source": "/api/calendar/handcovoiturage.ics",
-        "function": "calendarExport"
+        "source": "/api/calendar/**",
+        "function": { "functionId": "calendarExport", "region": "europe-west1" }
       },
       { "source": "**", "destination": "/index.html" }
     ]
@@ -16,7 +16,8 @@
   },
   "functions": {
     "source": "functions",
-    "runtime": "nodejs20"
+    "runtime": "nodejs20",
+    "predeploy": ["npm --prefix \"$RESOURCE_DIR\" run build"]
   },
   "emulators": {
     "auth": { "port": 9099 },

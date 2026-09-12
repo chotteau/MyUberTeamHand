@@ -2,86 +2,117 @@ import {
   addDoc,
   collection,
   doc,
-  getDoc,
   getDocs,
   orderBy,
   query,
   serverTimestamp,
   updateDoc,
   where,
+  type DocumentData,
+  type QueryDocumentSnapshot,
 } from 'firebase/firestore'
 import { db } from './firebase'
-import type { Address, Child } from '../types'
+import type { Address, Child, ChildAddresses, ChildParent } from '../types'
 
 const childrenCol = () => collection(db, 'children')
 
-/** Liste tous les enfants (triés par prénom). */
-export async function listChildren(): Promise<Child[]> {
-  const q = query(childrenCol(), orderBy('firstName', 'asc'))
-  const snap = await getDocs(q)
-  return snap.docs.map((d) => ({ id: d.id, ...d.data() }) as Child)
-}
-
-/** Récupère un enfant. */
-export async function getChild(id: string): Promise<Child | null> {
-  const snap = await getDoc(doc(db, 'children', id))
-  return snap.exists() ? ({ id: snap.id, ...snap.data() } as Child) : null
-}
-
 /**
- * Recherche un enfant par prénom (déduplication import CSV).
- * Pas de nom de famille — le prénom est l'identifiant lisible (ex: "Lucas M").
+ * Normalise un document enfant. Tolère l'ancienne structure
+ * (addresses en tableau, pas de parents) pour ne jamais planter l'UI.
  */
-export async function findChildByFirstName(
-  firstName: string,
-): Promise<Child | null> {
-  const q = query(childrenCol(), where('firstName', '==', firstName))
-  const snap = await getDocs(q)
-  if (snap.empty) return null
-  const d = snap.docs[0]
-  return { id: d.id, ...d.data() } as Child
+function toChild(d: QueryDocumentSnapshot<DocumentData>): Child {
+  const raw = d.data()
+  let addresses: ChildAddresses
+  if (Array.isArray(raw.addresses)) {
+    const [a, b] = raw.addresses as Address[]
+    addresses = {
+      default: a ?? { label: 'Domicile', street: '', zipCode: '', city: '' },
+      ...(b ? { secondary: b } : {}),
+    }
+  } else {
+    addresses = raw.addresses ?? {
+      default: { label: 'Domicile', street: '', zipCode: '', city: '' },
+    }
+  }
+  const parents: ChildParent[] = raw.parents ?? []
+  return {
+    id: d.id,
+    firstName: raw.firstName ?? '',
+    parents,
+    parentEmails: raw.parentEmails ?? parents.map((p) => p.email),
+    addresses,
+    active: raw.active ?? true,
+    createdAt: raw.createdAt,
+    updatedAt: raw.updatedAt,
+  }
 }
 
-/** Crée un enfant. */
-export async function createChild(
-  data: Omit<Child, 'id' | 'createdAt'>,
-): Promise<string> {
+/** Tous les enfants, triés par prénom. */
+export async function listChildren(): Promise<Child[]> {
+  const snap = await getDocs(query(childrenCol(), orderBy('firstName', 'asc')))
+  return snap.docs.map(toChild)
+}
+
+/** Les enfants d'un parent (liaison par email du compte). */
+export async function listMyChildren(email: string): Promise<Child[]> {
+  if (!email) return []
+  const snap = await getDocs(
+    query(childrenCol(), where('parentEmails', 'array-contains', email.toLowerCase())),
+  )
+  return snap.docs.map(toChild).sort((a, b) => a.firstName.localeCompare(b.firstName))
+}
+
+/** Recherche par prénom exact (déduplication import CSV). */
+export async function findChildByFirstName(firstName: string): Promise<Child | null> {
+  const snap = await getDocs(query(childrenCol(), where('firstName', '==', firstName)))
+  return snap.empty ? null : toChild(snap.docs[0])
+}
+
+export interface ChildInput {
+  firstName: string
+  parents: ChildParent[]
+  addresses: ChildAddresses
+  active: boolean
+}
+
+function withDerived(input: ChildInput) {
+  const parents = input.parents.map((p) => ({
+    firstName: p.firstName.trim(),
+    email: p.email.trim().toLowerCase(),
+  }))
+  return {
+    firstName: input.firstName.trim(),
+    parents,
+    parentEmails: parents.map((p) => p.email),
+    addresses: input.addresses,
+    active: input.active,
+  }
+}
+
+export async function createChild(input: ChildInput): Promise<string> {
   const ref = await addDoc(childrenCol(), {
-    ...data,
+    ...withDerived(input),
     createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
   })
   return ref.id
 }
 
-/** Met à jour un enfant. */
-export async function updateChild(
+export async function updateChild(id: string, input: ChildInput): Promise<void> {
+  await updateDoc(doc(db, 'children', id), {
+    ...withDerived(input),
+    updatedAt: serverTimestamp(),
+  })
+}
+
+/** Un parent ne peut modifier que les adresses de son enfant. */
+export async function updateChildAddresses(
   id: string,
-  patch: Partial<Omit<Child, 'id'>>,
+  addresses: ChildAddresses,
 ): Promise<void> {
-  await updateDoc(doc(db, 'children', id), patch)
+  await updateDoc(doc(db, 'children', id), { addresses, updatedAt: serverTimestamp() })
 }
 
-/** Active / désactive un enfant. */
 export async function setChildActive(id: string, active: boolean): Promise<void> {
-  await updateChild(id, { active })
-}
-
-/** Génère un id d'adresse stable. */
-export function makeAddressId(): string {
-  return `addr_${Math.random().toString(36).slice(2, 10)}`
-}
-
-/** Fusionne des adresses sans doublon (par street + zipCode). */
-export function mergeAddresses(
-  existing: Address[],
-  incoming: Address[],
-): Address[] {
-  const result = [...existing]
-  for (const addr of incoming) {
-    const dup = result.some(
-      (a) => a.street === addr.street && a.zipCode === addr.zipCode,
-    )
-    if (!dup) result.push(addr)
-  }
-  return result
+  await updateDoc(doc(db, 'children', id), { active, updatedAt: serverTimestamp() })
 }

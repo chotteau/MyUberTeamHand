@@ -1,54 +1,49 @@
 import { useState } from 'react'
-import { useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
+import { Calendar, Plus, RefreshCw, Pencil, Ban, Sun, RotateCcw, Trash2 } from 'lucide-react'
 import {
-  Calendar,
-  Plus,
-  RefreshCw,
-  Pencil,
-  Ban,
-  Trash2,
-  MapPin,
-  Clock,
-} from 'lucide-react'
-import { useEvents, useSetEventStatus, useDeleteEvent } from '../../hooks/useEvents'
+  EVENTS_KEY,
+  useEvents,
+  useSetEventStatus,
+  useDeleteEvent,
+  type EventsRange,
+} from '../../hooks/useEvents'
 import { triggerIcsSync } from '../../services/icsSync'
 import { EventFormModal } from '../../components/admin/EventFormModal'
-import {
-  EventStatusBadge,
-  EventTypeBadge,
-} from '../../components/ui/StatusBadge'
-import { Spinner } from '../../components/ui/Spinner'
-import { formatDate, formatTime } from '../../utils/dates'
-import type { Event } from '../../types'
+import { EventSummary } from '../../components/events/EventSummary'
+import { EventStatusBadge, EventTypeBadge } from '../../components/ui/StatusBadge'
+import { PageSpinner } from '../../components/ui/Spinner'
+import { isEventPast } from '../../utils/dates'
+import type { Event, EventStatus } from '../../types'
+
+const RANGES: { value: EventsRange; label: string }[] = [
+  { value: 'two-weeks', label: '2 semaines' },
+  { value: 'season', label: 'Saison' },
+  { value: 'past', label: 'Passés' },
+]
 
 export default function AdminEvents() {
-  const { data: events, isLoading } = useEvents()
+  const [range, setRange] = useState<EventsRange>('two-weeks')
+  const { data: events, isLoading } = useEvents(range)
   const setStatus = useSetEventStatus()
   const deleteEvent = useDeleteEvent()
   const qc = useQueryClient()
-  const [modalOpen, setModalOpen] = useState(false)
-  const [editing, setEditing] = useState<Event | null>(null)
-  const [syncing, setSyncing] = useState(false)
+  const [modal, setModal] = useState<{ open: boolean; event: Event | null }>({ open: false, event: null })
 
-  function openCreate() {
-    setEditing(null)
-    setModalOpen(true)
-  }
+  const sync = useMutation({
+    mutationFn: triggerIcsSync,
+    onSuccess: (res) => {
+      qc.invalidateQueries({ queryKey: EVENTS_KEY })
+      toast.success(`Sync ICS : ${res.created} créé(s), ${res.updated} mis à jour, ${res.cancelled} annulé(s)`)
+    },
+    onError: () => toast.error('Échec de la synchronisation ICS'),
+  })
 
-  function openEdit(event: Event) {
-    setEditing(event)
-    setModalOpen(true)
-  }
-
-  function handleCancel(event: Event) {
-    if (!confirm(`Annuler « ${event.title} » ?`)) return
+  function changeStatus(event: Event, status: EventStatus, label: string) {
     setStatus.mutate(
-      { id: event.id, status: 'cancelled' },
-      {
-        onSuccess: () => toast.success('Événement annulé'),
-        onError: () => toast.error("Échec de l'annulation"),
-      },
+      { id: event.id, status },
+      { onSuccess: () => toast.success(label), onError: () => toast.error('Échec') },
     )
   }
 
@@ -60,21 +55,6 @@ export default function AdminEvents() {
     })
   }
 
-  async function handleSync() {
-    setSyncing(true)
-    try {
-      const res = await triggerIcsSync()
-      qc.invalidateQueries({ queryKey: ['events'] })
-      toast.success(
-        `Sync ICS : ${res.created} créé(s), ${res.updated} mis à jour, ${res.cancelled} annulé(s)`,
-      )
-    } catch {
-      toast.error('Échec de la synchronisation ICS')
-    } finally {
-      setSyncing(false)
-    }
-  }
-
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -83,51 +63,57 @@ export default function AdminEvents() {
           Événements
         </h1>
         <div className="flex gap-2">
-          <button
-            onClick={handleSync}
-            className="btn-secondary"
-            disabled={syncing}
-          >
-            <RefreshCw
-              className={`h-4 w-4 ${syncing ? 'animate-spin' : ''}`}
-            />
-            {syncing ? 'Synchro…' : 'Sync ICS'}
+          <button onClick={() => sync.mutate()} className="btn-secondary" disabled={sync.isPending}>
+            <RefreshCw className={`h-4 w-4 ${sync.isPending ? 'animate-spin' : ''}`} />
+            Sync FFHB
           </button>
-          <button onClick={openCreate} className="btn-primary">
+          <button onClick={() => setModal({ open: true, event: null })} className="btn-primary">
             <Plus className="h-4 w-4" />
             Nouvel événement
           </button>
         </div>
       </div>
 
+      <p className="text-xs text-slate-400">
+        Les entraînements récurrents sont générés depuis la Config ; les matchs FFHB arrivent par la synchro
+        (auto toutes les 24 h). Créez ici un entraînement exceptionnel ou un match hors flux.
+      </p>
+
+      <div className="flex gap-1 rounded-lg bg-slate-100 p-1">
+        {RANGES.map((r) => (
+          <button
+            key={r.value}
+            onClick={() => setRange(r.value)}
+            className={`flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition ${
+              range === r.value ? 'bg-white text-secondary shadow-sm' : 'text-slate-500'
+            }`}
+          >
+            {r.label}
+          </button>
+        ))}
+      </div>
+
       {isLoading ? (
-        <div className="flex justify-center py-12">
-          <Spinner />
-        </div>
+        <PageSpinner />
       ) : !events || events.length === 0 ? (
-        <div className="card py-12 text-center text-sm text-slate-400">
-          Aucun événement à venir. Créez-en un ou générez les entraînements
-          depuis la Config.
-        </div>
+        <div className="card py-12 text-center text-sm text-slate-400">Aucun événement sur cette période.</div>
       ) : (
         <div className="space-y-2">
           {events.map((event) => (
             <EventRow
               key={event.id}
               event={event}
-              onEdit={() => openEdit(event)}
-              onCancel={() => handleCancel(event)}
+              onEdit={() => setModal({ open: true, event })}
+              onStatus={(s, label) => changeStatus(event, s, label)}
               onDelete={() => handleDelete(event)}
             />
           ))}
         </div>
       )}
 
-      <EventFormModal
-        open={modalOpen}
-        onClose={() => setModalOpen(false)}
-        event={editing}
-      />
+      {modal.open && (
+        <EventFormModal event={modal.event} onClose={() => setModal({ open: false, event: null })} />
+      )}
     </div>
   )
 }
@@ -135,73 +121,56 @@ export default function AdminEvents() {
 function EventRow({
   event,
   onEdit,
-  onCancel,
+  onStatus,
   onDelete,
 }: {
   event: Event
   onEdit: () => void
-  onCancel: () => void
+  onStatus: (s: EventStatus, label: string) => void
   onDelete: () => void
 }) {
-  const cancelled = event.status === 'cancelled'
+  const past = isEventPast(event)
+  const frozen = past
+  const scheduled = event.status === 'scheduled'
   return (
-    <div className={`card !p-3 ${cancelled ? 'opacity-60' : ''}`}>
+    <div className={`card !p-3 ${past || !scheduled ? 'opacity-60' : ''}`}>
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
           <div className="mb-1 flex flex-wrap items-center gap-2">
             <EventTypeBadge type={event.type} />
-            <EventStatusBadge status={event.status} />
-            {event.source === 'ics_ffhb' && (
-              <span className="badge bg-slate-100 text-slate-500">FFHB</span>
-            )}
+            <EventStatusBadge status={event.status} past={past} />
+            {event.source === 'ics_ffhb' && <span className="badge bg-slate-100 text-slate-500">FFHB</span>}
+            {event.source === 'generated' && <span className="badge bg-slate-100 text-slate-500">Auto</span>}
           </div>
-          <div className="truncate font-medium text-secondary">
-            {event.title}
-          </div>
-          <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-500">
-            <span className="flex items-center gap-1">
-              <Calendar className="h-3 w-3" />
-              {formatDate(event.date)}
-            </span>
-            <span className="flex items-center gap-1">
-              <Clock className="h-3 w-3" />
-              {formatTime(event.departureTime)}
-              {event.returnTime ? ` → ${formatTime(event.returnTime)}` : ''}
-            </span>
-            {event.location.name && (
-              <span className="flex items-center gap-1">
-                <MapPin className="h-3 w-3" />
-                {event.location.name}
-                {event.location.city ? `, ${event.location.city}` : ''}
-              </span>
-            )}
-          </div>
+          <div className="truncate font-medium text-secondary">{event.title}</div>
+          <EventSummary event={event} />
         </div>
-        <div className="flex shrink-0 gap-1">
-          <button
-            onClick={onEdit}
-            className="btn-ghost p-2 text-slate-500"
-            aria-label="Modifier"
-          >
-            <Pencil className="h-4 w-4" />
-          </button>
-          {!cancelled && (
-            <button
-              onClick={onCancel}
-              className="btn-ghost p-2 text-amber-600"
-              aria-label="Annuler"
-            >
-              <Ban className="h-4 w-4" />
+        {!frozen && (
+          <div className="flex shrink-0 gap-0.5">
+            <button onClick={onEdit} className="btn-ghost p-2 text-slate-500" aria-label="Modifier" title="Modifier">
+              <Pencil className="h-4 w-4" />
             </button>
-          )}
-          <button
-            onClick={onDelete}
-            className="btn-ghost p-2 text-danger"
-            aria-label="Supprimer"
-          >
-            <Trash2 className="h-4 w-4" />
-          </button>
-        </div>
+            {scheduled ? (
+              <>
+                <button onClick={() => onStatus('vacances', 'Marqué « vacances »')} className="btn-ghost p-2 text-amber-600" aria-label="Vacances" title="Vacances scolaires">
+                  <Sun className="h-4 w-4" />
+                </button>
+                <button onClick={() => onStatus('cancelled', 'Événement annulé')} className="btn-ghost p-2 text-danger" aria-label="Annuler" title="Annuler">
+                  <Ban className="h-4 w-4" />
+                </button>
+              </>
+            ) : (
+              <button onClick={() => onStatus('scheduled', 'Événement réactivé')} className="btn-ghost p-2 text-success" aria-label="Réactiver" title="Réactiver">
+                <RotateCcw className="h-4 w-4" />
+              </button>
+            )}
+            {event.source === 'manual' && (
+              <button onClick={onDelete} className="btn-ghost p-2 text-slate-400" aria-label="Supprimer" title="Supprimer">
+                <Trash2 className="h-4 w-4" />
+              </button>
+            )}
+          </div>
+        )}
       </div>
     </div>
   )

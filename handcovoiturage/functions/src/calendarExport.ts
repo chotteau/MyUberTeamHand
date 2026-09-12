@@ -2,186 +2,203 @@ import { onRequest } from 'firebase-functions/v2/https'
 import { logger } from 'firebase-functions/v2'
 import { Timestamp } from 'firebase-admin/firestore'
 import { db } from './lib/admin.js'
-import { getUserName, type EventLite } from './lib/data.js'
 
-interface PassengerLite {
+type Direction = 'aller' | 'retour'
+
+interface TripAddress {
+  kind: 'default' | 'secondary' | 'custom'
+  label: string
+  street: string
+  zipCode: string
+  city: string
+}
+interface Participant {
   childId: string
-  needId?: string
-  pickupAddress?: string
+  childName: string
+  aller: TripAddress | null
+  retour: TripAddress | null
 }
-
-interface RideLite {
+interface Car {
+  driverName: string
+  aller: boolean
+  retour: boolean
+  passengersAller: string[]
+  passengersRetour: string[]
+}
+interface EventDoc {
   id: string
-  eventId: string
-  driverUid: string
-  direction: 'outbound' | 'return'
-  passengers: PassengerLite[]
-  status: string
-}
-
-interface EventFull extends EventLite {
+  title: string
+  type: 'training' | 'match'
+  status: 'scheduled' | 'cancelled' | 'vacances'
   departureTime: Timestamp
   returnTime?: Timestamp
   location: { name: string; address: string; city: string }
+  updatedAt?: Timestamp
 }
 
-/** Échappe les caractères spéciaux ICS dans un texte. */
-function esc(text: string): string {
-  return text
-    .replace(/\\/g, '\\\\')
-    .replace(/;/g, '\\;')
-    .replace(/,/g, '\\,')
-    .replace(/\n/g, '\\n')
-}
+const esc = (t: string) =>
+  t.replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/,/g, '\\,').replace(/\n/g, '\\n')
+const toIcsUtc = (d: Date) => d.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '')
 
-/** Formate une date en UTC compacte (YYYYMMDDTHHMMSSZ). */
-function toIcsUtc(d: Date): string {
-  return d.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '')
-}
-
+/** RFC 5545 : repli des lignes > 75 octets (UTF-8). */
 function foldLine(line: string): string {
-  // RFC 5545 : lignes ≤ 75 octets, repli avec espace.
-  if (line.length <= 75) return line
-  const chunks: string[] = []
-  let rest = line
-  chunks.push(rest.slice(0, 75))
-  rest = rest.slice(75)
-  while (rest.length > 74) {
-    chunks.push(' ' + rest.slice(0, 74))
-    rest = rest.slice(74)
+  const bytes = Buffer.from(line, 'utf8')
+  if (bytes.length <= 75) return line
+  const out: string[] = []
+  let i = 0
+  let first = true
+  while (i < bytes.length) {
+    let len = first ? 75 : 74
+    // Ne pas couper un caractère multi-octets.
+    while (i + len < bytes.length && (bytes[i + len] & 0xc0) === 0x80) len--
+    out.push((first ? '' : ' ') + bytes.subarray(i, i + len).toString('utf8'))
+    i += len
+    first = false
   }
-  if (rest.length) chunks.push(' ' + rest)
-  return chunks.join('\r\n')
+  return out.join('\r\n')
+}
+
+const fmtTime = (ts: Timestamp) =>
+  new Intl.DateTimeFormat('fr-FR', {
+    timeZone: 'Europe/Paris',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(ts.toDate())
+const fmtDateTime = (ts: Timestamp) =>
+  new Intl.DateTimeFormat('fr-FR', {
+    timeZone: 'Europe/Paris',
+    day: '2-digit',
+    month: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(ts.toDate())
+
+function addrText(a: TripAddress | null): string {
+  if (!a) return ''
+  const full = [a.street, [a.zipCode, a.city].filter(Boolean).join(' ')].filter(Boolean).join(', ')
+  return a.kind === 'custom' || !a.label ? full : `${a.label} — ${full}`
+}
+
+/** Bloc texte d'une direction : voitures, passagers avec adresse, sans-voiture. */
+function directionBlock(
+  label: string,
+  time: Timestamp,
+  direction: Direction,
+  participants: Participant[],
+  cars: Car[],
+): string[] {
+  const key = direction === 'aller' ? 'passengersAller' : 'passengersRetour'
+  const byId = new Map(participants.map((p) => [p.childId, p]))
+  const present = participants.filter((p) => p[direction])
+  const lines = [`${label} — départ ${fmtTime(time)}`]
+  if (present.length === 0) {
+    lines.push('Personne d’inscrit')
+    return lines
+  }
+  const seated = new Set<string>()
+  for (const car of cars.filter((c) => c[direction]).sort((a, b) => a.driverName.localeCompare(b.driverName))) {
+    const names = car[key]
+      .map((id) => byId.get(id))
+      .filter((p): p is Participant => !!p)
+      .map((p) => {
+        seated.add(p.childId)
+        const a = addrText(p[direction])
+        return a ? `${p.childName} (${a})` : p.childName
+      })
+    lines.push(`🚗 ${car.driverName} : ${names.join(', ') || '—'}`)
+  }
+  const without = present.filter((p) => !seated.has(p.childId)).map((p) => p.childName)
+  if (cars.filter((c) => c[direction]).length === 0) lines.push('❗ Aucune voiture')
+  else if (without.length) lines.push(`❗ Sans voiture : ${without.join(', ')}`)
+  else lines.push('✅ Tout le monde a une voiture')
+  return lines
 }
 
 /**
- * HTTP GET /api/calendar/handcovoiturage.ics
- * Génère un calendrier public des trajets confirmés/terminés des 4 prochaines
- * semaines. SÉCURITÉ : aucun email ni téléphone (export public).
+ * GET /api/calendar/{token}.ics — un VEVENT par événement, l'organisation
+ * complète dans la description. Prénoms + adresses de prise en charge,
+ * jamais d'email. Protégé par le token de config/app.calendarToken.
  */
-export const calendarExport = onRequest(
-  { region: 'europe-west1', cors: true },
-  async (_req, res) => {
-    try {
-      const now = new Date()
-      const horizon = Timestamp.fromMillis(
-        now.getTime() + 28 * 24 * 3600 * 1000,
-      )
-      const fromTs = Timestamp.fromMillis(now.getTime() - 24 * 3600 * 1000)
-
-      // Événements dans la fenêtre.
-      const eventsSnap = await db
-        .collection('events')
-        .where('date', '>=', fromTs)
-        .where('date', '<=', horizon)
-        .get()
-
-      const eventMap = new Map<string, EventFull>()
-      for (const d of eventsSnap.docs) {
-        eventMap.set(d.id, {
-          id: d.id,
-          title: d.get('title'),
-          date: d.get('date'),
-          departureTime: d.get('departureTime'),
-          returnTime: d.get('returnTime'),
-          location: d.get('location') ?? { name: '', address: '', city: '' },
-        })
-      }
-
-      // Trajets confirmés / terminés rattachés à ces événements.
-      const ridesSnap = await db
-        .collection('rides')
-        .where('status', 'in', ['confirmed', 'completed'])
-        .get()
-      const rides = ridesSnap.docs
-        .map((d) => ({ id: d.id, ...d.data() }) as RideLite)
-        .filter((r) => eventMap.has(r.eventId))
-
-      // Résolution des noms (chauffeurs + enfants) en une passe.
-      const driverNames = new Map<string, string>()
-      const childNames = new Map<string, string>()
-      const childIds = new Set<string>()
-      for (const r of rides) {
-        if (!driverNames.has(r.driverUid)) {
-          driverNames.set(r.driverUid, await getUserName(r.driverUid))
-        }
-        r.passengers.forEach((p) => childIds.add(p.childId))
-      }
-      await Promise.all(
-        [...childIds].map(async (id) => {
-          const snap = await db.doc(`children/${id}`).get()
-          childNames.set(
-            id,
-            snap.exists
-              ? `${snap.get('firstName') ?? ''} ${snap.get('lastName') ?? ''}`.trim()
-              : '—',
-          )
-        }),
-      )
-
-      const lines: string[] = [
-        'BEGIN:VCALENDAR',
-        'VERSION:2.0',
-        'PRODID:-//HandCovoiturage//FR',
-        'CALSCALE:GREGORIAN',
-        'X-WR-CALNAME:HandCovoiturage',
-        'X-WR-TIMEZONE:Europe/Paris',
-      ]
-
-      for (const ride of rides) {
-        const ev = eventMap.get(ride.eventId)!
-        const isOutbound = ride.direction === 'outbound'
-        const startTs = isOutbound ? ev.departureTime : ev.returnTime
-        if (!startTs) continue
-        const start = startTs.toDate()
-        const end = new Date(start.getTime() + 45 * 60 * 1000)
-
-        const driverName = driverNames.get(ride.driverUid) ?? 'Chauffeur'
-        const passengerNames = ride.passengers
-          .map((p) => childNames.get(p.childId) ?? '—')
-          .filter(Boolean)
-        const dirLabel = isOutbound ? 'Aller' : 'Retour'
-        const summary = `🚗 ${dirLabel} — ${driverName} (${passengerNames.join(', ')})`
-
-        const locParts = [ev.location.name, ev.location.address, ev.location.city]
-          .filter(Boolean)
-          .join(', ')
-
-        const descLines = [
-          `Chauffeur: ${driverName}`,
-          'Passagers:',
-          ...ride.passengers.map(
-            (p) =>
-              `- ${childNames.get(p.childId) ?? '—'}${
-                p.pickupAddress ? ` (${p.pickupAddress})` : ''
-              }`,
-          ),
-        ]
-
-        lines.push(
-          'BEGIN:VEVENT',
-          `UID:ride-${ride.id}@handcovoiturage`,
-          `DTSTAMP:${toIcsUtc(now)}`,
-          `DTSTART:${toIcsUtc(start)}`,
-          `DTEND:${toIcsUtc(end)}`,
-          foldLine(`SUMMARY:${esc(summary)}`),
-          foldLine(`LOCATION:${esc(locParts)}`),
-          foldLine(`DESCRIPTION:${esc(descLines.join('\n'))}`),
-          `STATUS:${ride.status === 'completed' ? 'CONFIRMED' : 'CONFIRMED'}`,
-          'END:VEVENT',
-        )
-      }
-
-      lines.push('END:VCALENDAR')
-      const body = lines.join('\r\n')
-
-      res.set('Content-Type', 'text/calendar; charset=utf-8')
-      res.set('Content-Disposition', 'inline; filename="handcovoiturage.ics"')
-      res.set('Cache-Control', 'public, max-age=300')
-      res.status(200).send(body)
-    } catch (e) {
-      logger.error('Échec export ICS', e)
-      res.status(500).send('Erreur génération calendrier')
+export const calendarExport = onRequest({ region: 'europe-west1' }, async (req, res) => {
+  try {
+    const cfgSnap = await db.doc('config/app').get()
+    const token = cfgSnap.get('calendarToken') as string | undefined
+    const m = /\/api\/calendar\/([A-Za-z0-9_-]+)\.ics$/.exec(req.path)
+    if (!token || !m || m[1] !== token) {
+      res.status(404).send('Not found')
+      return
     }
-  },
-)
+    const calendarName = (cfgSnap.get('calendarName') as string) || 'HandCovoiturage'
+    const seasonEnd = cfgSnap.get('seasonEnd') as Timestamp | undefined
+    const appUrl = (process.env.APP_URL || 'https://myuberteamhand.web.app').replace(/\/$/, '')
+
+    const from = Timestamp.fromMillis(Date.now() - 7 * 24 * 3600 * 1000)
+    let q = db.collection('events').where('date', '>=', from)
+    if (seasonEnd) q = q.where('date', '<=', seasonEnd)
+    const eventsSnap = await q.orderBy('date', 'asc').get()
+
+    const lines = [
+      'BEGIN:VCALENDAR',
+      'VERSION:2.0',
+      'PRODID:-//HandCovoiturage//FR',
+      'CALSCALE:GREGORIAN',
+      'METHOD:PUBLISH',
+      foldLine(`X-WR-CALNAME:${esc(calendarName)}`),
+      'X-WR-TIMEZONE:Europe/Paris',
+    ]
+    const now = new Date()
+
+    for (const d of eventsSnap.docs) {
+      const ev = { id: d.id, ...(d.data() as Omit<EventDoc, 'id'>) }
+      const [pSnap, cSnap] = await Promise.all([
+        d.ref.collection('participants').get(),
+        d.ref.collection('cars').get(),
+      ])
+      const participants = pSnap.docs.map((x) => x.data() as Participant)
+      const cars = cSnap.docs.map((x) => x.data() as Car)
+
+      const cancelled = ev.status !== 'scheduled'
+      const emoji = ev.type === 'match' ? '🏆' : '🤾'
+      const suffix = ev.status === 'vacances' ? ' (vacances)' : ev.status === 'cancelled' ? ' (annulé)' : ''
+      const summary = `${cancelled ? '❌ ' : emoji + ' '}${ev.title}${suffix}`
+
+      const start = ev.departureTime.toDate()
+      const end = ev.returnTime ? ev.returnTime.toDate() : new Date(start.getTime() + 2 * 3600 * 1000)
+
+      const desc: string[] = cancelled
+        ? [`Événement ${ev.status === 'vacances' ? 'annulé (vacances scolaires)' : 'annulé'}.`]
+        : [
+            ...directionBlock('ALLER', ev.departureTime, 'aller', participants, cars),
+            '',
+            ...(ev.returnTime
+              ? directionBlock('RETOUR', ev.returnTime, 'retour', participants, cars)
+              : []),
+          ]
+      desc.push('', `Mis à jour le ${fmtDateTime(Timestamp.fromDate(now))} — ${appUrl}/event/${ev.id}`)
+
+      const loc = [ev.location?.name, ev.location?.address, ev.location?.city].filter(Boolean).join(', ')
+
+      lines.push(
+        'BEGIN:VEVENT',
+        `UID:event-${ev.id}@handcovoiturage`,
+        `DTSTAMP:${toIcsUtc(now)}`,
+        `DTSTART:${toIcsUtc(start)}`,
+        `DTEND:${toIcsUtc(end)}`,
+        foldLine(`SUMMARY:${esc(summary)}`),
+        foldLine(`LOCATION:${esc(loc)}`),
+        foldLine(`DESCRIPTION:${esc(desc.join('\n'))}`),
+        `STATUS:${cancelled ? 'CANCELLED' : 'CONFIRMED'}`,
+        'END:VEVENT',
+      )
+    }
+    lines.push('END:VCALENDAR')
+
+    res.set('Content-Type', 'text/calendar; charset=utf-8')
+    res.set('Content-Disposition', 'inline; filename="handcovoiturage.ics"')
+    res.set('Cache-Control', 'public, max-age=300')
+    res.status(200).send(lines.join('\r\n'))
+  } catch (e) {
+    logger.error('Échec export ICS', e)
+    res.status(500).send('Erreur génération calendrier')
+  }
+})

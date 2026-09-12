@@ -1,112 +1,97 @@
-import {
-  collection,
-  getDocs,
-  query,
-  Timestamp,
-  where,
-} from 'firebase/firestore'
-import { db } from './firebase'
-import type { Ride } from '../types'
+import { getConfig } from './config'
+import { listEvents } from './events'
+import { getBoard } from './board'
+import { isEventPast, toDate } from '../utils/dates'
+import type { Child } from '../types'
 
 export interface DriverStat {
-  /** Enfant du chauffeur = identifiant de la famille (lisible par tous). */
-  driverChildId: string
-  /** Nombre de trajets aller conduits. */
-  outboundCount: number
-  /** Nombre de trajets retour conduits. */
-  returnCount: number
-  /** Total trajets conduits (aller + retour). */
-  rideCount: number
-  /** Nombre de passagers transportés (hors enfant du chauffeur). */
+  driverUid: string
+  driverName: string
+  allerCount: number
+  retourCount: number
+  total: number
   passengerCount: number
-  /** % de participation : trajets conduits / total events de la saison × 2 directions. */
   participationPct: number
 }
 
 export interface StatsResult {
   drivers: DriverStat[]
-  totalRides: number
+  totalTrips: number
   totalPassengers: number
   eventsCount: number
-}
-
-/** Borne basse de la saison courante (1er septembre de l'année sportive). */
-export function seasonStart(now = new Date()): Date {
-  const year = now.getMonth() >= 7 ? now.getFullYear() : now.getFullYear() - 1
-  return new Date(year, 8, 1)
+  /** Familles (prénoms des parents) sans aucun trajet cette saison. */
+  familiesWithoutTrip: string[]
 }
 
 /**
- * Agrège les trajets confirmés/terminés sur la saison complète.
- * Inclut la ventilation aller/retour et le % de participation.
+ * Agrège les voitures de tous les événements passés de la saison.
+ * Un trajet = une voiture × une direction active.
  */
-export async function getStats(now = new Date()): Promise<StatsResult> {
-  const from = Timestamp.fromDate(seasonStart(now))
-  const to = Timestamp.fromDate(now)
+export async function getStats(children: Child[]): Promise<StatsResult> {
+  const config = await getConfig()
+  const events = (await listEvents(toDate(config.seasonStart), new Date()))
+    .filter((e) => e.status === 'scheduled' && isEventPast(e))
 
-  // Événements de la saison (pour calculer le % de participation).
-  const eventsSnap = await getDocs(
-    query(
-      collection(db, 'events'),
-      where('date', '>=', from),
-      where('date', '<=', to),
-    ),
-  )
-  const eventIds = new Set(eventsSnap.docs.map((d) => d.id))
-  const eventsCount = eventIds.size
-
-  // Trajets confirmés/terminés rattachés à ces événements.
-  const ridesSnap = await getDocs(
-    query(
-      collection(db, 'rides'),
-      where('status', 'in', ['confirmed', 'completed']),
-    ),
-  )
-  const rides = ridesSnap.docs
-    .map((d) => ({ id: d.id, ...d.data() }) as Ride)
-    .filter((r) => eventIds.has(r.eventId))
+  const boards = await Promise.all(events.map((e) => getBoard(e.id)))
 
   const byDriver = new Map<string, DriverStat>()
+  let totalTrips = 0
   let totalPassengers = 0
+  let maxTrips = 0
 
-  for (const ride of rides) {
-    // L'enfant du chauffeur est le passager sans needId (règle 1).
-    const driverPassenger = ride.passengers.find((p) => !p.needId)
-    const driverChildId = driverPassenger?.childId ?? 'inconnu'
-    const transported = ride.passengers.filter((p) => p.needId).length
-    totalPassengers += transported
-
-    const cur = byDriver.get(driverChildId) ?? {
-      driverChildId,
-      outboundCount: 0,
-      returnCount: 0,
-      rideCount: 0,
-      passengerCount: 0,
-      participationPct: 0,
+  events.forEach((ev, i) => {
+    maxTrips += ev.returnTime ? 2 : 1
+    for (const car of boards[i].cars) {
+      const cur = byDriver.get(car.driverUid) ?? {
+        driverUid: car.driverUid,
+        driverName: car.driverName,
+        allerCount: 0,
+        retourCount: 0,
+        total: 0,
+        passengerCount: 0,
+        participationPct: 0,
+      }
+      if (car.aller) {
+        cur.allerCount++
+        cur.passengerCount += car.passengersAller.filter(
+          (id) => !car.driverChildIds.includes(id),
+        ).length
+      }
+      if (car.retour) {
+        cur.retourCount++
+        cur.passengerCount += car.passengersRetour.filter(
+          (id) => !car.driverChildIds.includes(id),
+        ).length
+      }
+      cur.total = cur.allerCount + cur.retourCount
+      byDriver.set(car.driverUid, cur)
     }
+  })
 
-    if (ride.direction === 'outbound') cur.outboundCount++
-    else cur.returnCount++
-    cur.rideCount++
-    cur.passengerCount += transported
-    byDriver.set(driverChildId, cur)
+  for (const s of byDriver.values()) {
+    s.participationPct = maxTrips ? Math.round((s.total / maxTrips) * 100) : 0
+    totalTrips += s.total
+    totalPassengers += s.passengerCount
   }
 
-  // Calculer le % de participation.
-  // Base : eventsCount × 2 directions = nb max de trajets possible par chauffeur.
-  const maxRides = eventsCount * 2 || 1
-  for (const stat of byDriver.values()) {
-    stat.participationPct = Math.round((stat.rideCount / maxRides) * 100)
-  }
+  const drivers = [...byDriver.values()].sort((a, b) => b.total - a.total)
 
-  const drivers = Array.from(byDriver.values()).sort(
-    (a, b) => b.rideCount - a.rideCount,
-  )
+  // Familles sans trajet : prénoms de parents actifs jamais vus comme chauffeur.
+  const driverNames = new Set(drivers.map((d) => d.driverName.toLowerCase()))
+  const familiesWithoutTrip = Array.from(
+    new Set(
+      children
+        .filter((c) => c.active)
+        .flatMap((c) => c.parents.map((p) => p.firstName))
+        .filter((n) => n && !driverNames.has(n.toLowerCase())),
+    ),
+  ).sort()
 
   return {
     drivers,
-    totalRides: rides.length,
+    totalTrips,
     totalPassengers,
-    eventsCount,
+    eventsCount: events.length,
+    familiesWithoutTrip,
   }
 }

@@ -1,9 +1,7 @@
-import { useMemo } from 'react'
 import {
   Bar,
   BarChart,
   CartesianGrid,
-  Cell,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -12,76 +10,49 @@ import {
 } from 'recharts'
 import { BarChart3, Car, Users, CalendarDays, Trophy } from 'lucide-react'
 import { useStats } from '../hooks/useStats'
-import { useChildren } from '../hooks/useChildren'
-import { Spinner } from '../components/ui/Spinner'
+import { PageSpinner } from '../components/ui/Spinner'
+import { KpiCard } from '../components/ui/KpiCard'
 import type { DriverStat } from '../services/stats'
 
-// ---------------------------------------------------------------------------
-// Podium — Top 3
-// ---------------------------------------------------------------------------
 const MEDALS = ['🥇', '🥈', '🥉']
-const MEDAL_COLORS = ['#F59E0B', '#94A3B8', '#CD7F32'] // or, argent, bronze
+const MEDAL_CLS = [
+  'border-amber-400 text-amber-500',
+  'border-slate-400 text-slate-500',
+  'border-orange-700 text-orange-700',
+]
 
-function PodiumCard({
-  stat,
-  rank,
-  name,
-}: {
-  stat: DriverStat
-  rank: number
-  name: string
-}) {
-  const color = MEDAL_COLORS[rank] ?? '#CBD5E1'
+function PodiumCard({ stat, rank }: { stat: DriverStat; rank: number }) {
   return (
     <div
-      className="flex flex-col items-center gap-1 rounded-xl p-4 text-center shadow-sm"
-      style={{ border: `2px solid ${color}` }}
+      className={`flex flex-col items-center gap-1 rounded-xl border-2 bg-white p-4 text-center shadow-sm ${MEDAL_CLS[rank]}`}
     >
       <span className="text-3xl">{MEDALS[rank]}</span>
-      <span className="font-semibold text-secondary">{name}</span>
-      <span className="text-2xl font-bold" style={{ color }}>
-        {stat.rideCount}
-      </span>
+      <span className="font-semibold text-secondary">{stat.driverName}</span>
+      <span className="text-2xl font-bold">{stat.total}</span>
       <span className="text-xs text-slate-400">trajets</span>
       <span className="text-xs font-medium text-slate-500">
         {stat.participationPct}% de participation
       </span>
       <div className="mt-1 flex gap-2 text-xs text-slate-400">
-        <span>↗ {stat.outboundCount} aller</span>
-        <span>↙ {stat.returnCount} retour</span>
+        <span>↗ {stat.allerCount} aller</span>
+        <span>↙ {stat.retourCount} retour</span>
       </div>
     </div>
   )
 }
 
-// ---------------------------------------------------------------------------
-// Page principale
-// ---------------------------------------------------------------------------
 export default function Stats() {
   const { data: stats, isLoading } = useStats()
-  const { data: children } = useChildren()
-
-  const nameByChild = useMemo(() => {
-    const m = new Map<string, string>()
-    ;(children ?? []).forEach((c) => m.set(c.id, c.firstName))
-    return m
-  }, [children])
 
   const top3 = stats?.drivers.slice(0, 3) ?? []
-  const lastDriver = stats && stats.drivers.length > 1
-    ? stats.drivers[stats.drivers.length - 1]
-    : null
-
-  const chartData = useMemo(
-    () =>
-      (stats?.drivers ?? []).map((d) => ({
-        name: nameByChild.get(d.driverChildId) ?? 'Famille',
-        Aller: d.outboundCount,
-        Retour: d.returnCount,
-        isLast: d === lastDriver,
-      })),
-    [stats, nameByChild, lastDriver],
-  )
+  const minTotal = stats?.drivers.length
+    ? Math.min(...stats.drivers.map((d) => d.total))
+    : 0
+  const chartData = (stats?.drivers ?? []).map((d) => ({
+    name: d.driverName,
+    Aller: d.allerCount,
+    Retour: d.retourCount,
+  }))
 
   return (
     <div className="space-y-6">
@@ -91,96 +62,56 @@ export default function Stats() {
       </h1>
 
       {isLoading ? (
-        <div className="flex justify-center py-12">
-          <Spinner />
-        </div>
+        <PageSpinner />
       ) : !stats || stats.drivers.length === 0 ? (
         <div className="card py-12 text-center text-sm text-slate-400">
           Aucun trajet enregistré cette saison.
         </div>
       ) : (
         <>
-          {/* Podium Top 3 */}
-          {top3.length > 0 && (
-            <section className="card space-y-3">
-              <h2 className="flex items-center gap-2 font-semibold text-secondary">
-                <Trophy className="h-4 w-4 text-amber-500" />
-                Les héros du covoiturage 🚗
-              </h2>
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-                {top3.map((d, i) => (
-                  <PodiumCard
-                    key={d.driverChildId}
-                    stat={d}
-                    rank={i}
-                    name={nameByChild.get(d.driverChildId) ?? 'Famille'}
-                  />
-                ))}
-              </div>
-            </section>
-          )}
+          <section className="card space-y-3">
+            <h2 className="flex items-center gap-2 font-semibold text-secondary">
+              <Trophy className="h-4 w-4 text-amber-500" />
+              Les héros du covoiturage 🚗
+            </h2>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+              {top3.map((d, i) => (
+                <PodiumCard key={d.driverUid} stat={d} rank={i} />
+              ))}
+            </div>
+          </section>
 
-          {/* KPIs */}
           <div className="grid grid-cols-3 gap-3">
-            <KpiCard
-              icon={<Car className="h-4 w-4" />}
-              label="Trajets"
-              value={stats.totalRides}
-            />
+            <KpiCard icon={<Car className="h-4 w-4" />} label="Trajets" value={stats.totalTrips} />
             <KpiCard
               icon={<Users className="h-4 w-4" />}
-              label="Passagers"
+              label="Enfants transportés"
               value={stats.totalPassengers}
             />
             <KpiCard
               icon={<CalendarDays className="h-4 w-4" />}
-              label="Événements"
+              label="Événements passés"
               value={stats.eventsCount}
             />
           </div>
 
-          {/* Graphique barres bicolores aller/retour */}
           <div className="card">
-            <h2 className="mb-4 text-sm font-semibold text-slate-600">
-              Trajets par chauffeur
-            </h2>
-            <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={chartData} margin={{ left: -20 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                <XAxis
-                  dataKey="name"
-                  tick={{ fontSize: 11 }}
-                  interval={0}
-                  angle={-25}
-                  textAnchor="end"
-                  height={60}
-                />
-                <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
+            <h2 className="mb-4 text-sm font-semibold text-slate-600">Trajets par chauffeur</h2>
+            <ResponsiveContainer width="100%" height={Math.max(200, chartData.length * 36)}>
+              <BarChart data={chartData} layout="vertical" margin={{ left: 8, right: 16 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" horizontal={false} />
+                <XAxis type="number" allowDecimals={false} tick={{ fontSize: 11 }} />
+                <YAxis type="category" dataKey="name" width={90} tick={{ fontSize: 12 }} />
                 <Tooltip />
                 <Legend />
-                <Bar dataKey="Aller" stackId="a" fill="#F97316" radius={[0, 0, 0, 0]}>
-                  {chartData.map((entry, index) => (
-                    <Cell
-                      key={index}
-                      fill={entry.isLast ? '#FED7AA' : '#F97316'}
-                    />
-                  ))}
-                </Bar>
-                <Bar dataKey="Retour" stackId="a" fill="#1E293B" radius={[4, 4, 0, 0]}>
-                  {chartData.map((entry, index) => (
-                    <Cell
-                      key={index}
-                      fill={entry.isLast ? '#CBD5E1' : '#1E293B'}
-                    />
-                  ))}
-                </Bar>
+                <Bar dataKey="Aller" stackId="a" fill="#F97316" />
+                <Bar dataKey="Retour" stackId="a" fill="#1E293B" radius={[0, 4, 4, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
 
-          {/* Tableau détaillé */}
-          <div className="card !p-0 overflow-hidden">
-            <table className="w-full text-sm">
+          <div className="card !p-0 overflow-x-auto">
+            <table className="w-full min-w-[420px] text-sm">
               <thead>
                 <tr className="border-b border-slate-100 text-left text-xs uppercase text-slate-400">
                   <th className="p-3">Chauffeur</th>
@@ -192,26 +123,25 @@ export default function Stats() {
               </thead>
               <tbody>
                 {stats.drivers.map((d, i) => {
-                  const isTopDriver = i === 0
-                  const isLastDriver = i === stats.drivers.length - 1 && stats.drivers.length > 1
+                  const least = stats.drivers.length > 1 && d.total === minTotal
                   return (
                     <tr
-                      key={d.driverChildId}
+                      key={d.driverUid}
                       className={`border-b border-slate-50 last:border-0 ${
-                        isTopDriver ? 'bg-amber-50' : isLastDriver ? 'bg-slate-50' : ''
+                        i === 0 ? 'bg-amber-50' : least ? 'bg-slate-50' : ''
                       }`}
                     >
                       <td className="p-3 font-medium text-secondary">
-                        {nameByChild.get(d.driverChildId) ?? 'Famille'}
-                        {isLastDriver && (
+                        {d.driverName}
+                        {least && (
                           <span className="ml-2 rounded-full bg-slate-200 px-2 py-0.5 text-xs text-slate-500">
                             À ton tour 😉
                           </span>
                         )}
                       </td>
-                      <td className="p-3 text-right text-slate-600">{d.outboundCount}</td>
-                      <td className="p-3 text-right text-slate-600">{d.returnCount}</td>
-                      <td className="p-3 text-right font-semibold text-secondary">{d.rideCount}</td>
+                      <td className="p-3 text-right text-slate-600">{d.allerCount}</td>
+                      <td className="p-3 text-right text-slate-600">{d.retourCount}</td>
+                      <td className="p-3 text-right font-semibold text-secondary">{d.total}</td>
                       <td className="p-3 text-right">
                         <span
                           className={`font-medium ${
@@ -227,26 +157,14 @@ export default function Stats() {
               </tbody>
             </table>
           </div>
+
+          {stats.familiesWithoutTrip.length > 0 && (
+            <p className="text-xs text-slate-400">
+              Pas encore au volant cette saison : {stats.familiesWithoutTrip.join(', ')} 😉
+            </p>
+          )}
         </>
       )}
-    </div>
-  )
-}
-
-function KpiCard({
-  icon,
-  label,
-  value,
-}: {
-  icon: React.ReactNode
-  label: string
-  value: number
-}) {
-  return (
-    <div className="card flex flex-col items-center gap-1 !p-3 text-center">
-      <span className="text-primary">{icon}</span>
-      <span className="text-2xl font-bold text-secondary">{value}</span>
-      <span className="text-xs text-slate-400">{label}</span>
     </div>
   )
 }
