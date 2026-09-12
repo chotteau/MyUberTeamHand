@@ -9,6 +9,8 @@ import {
   type ChildInput,
 } from '../services/children'
 import { useAuth } from './useAuth'
+import { purgeChildFromUpcomingEvents } from '../services/board'
+import { EVENTS_KEY } from './useEvents'
 import type { ChildAddresses } from '../types'
 
 export const CHILDREN_KEY = ['children']
@@ -52,11 +54,18 @@ export function useSaveChildAddresses() {
   })
 }
 
+/** Désactiver un enfant le retire aussi des événements à venir. */
 export function useToggleChildActive() {
   const invalidate = useInvalidateChildren()
+  const qc = useQueryClient()
   return useMutation({
-    mutationFn: ({ id, active }: { id: string; active: boolean }) =>
-      setChildActive(id, active),
-    onSuccess: invalidate,
+    mutationFn: async ({ id, active }: { id: string; active: boolean }) => {
+      await setChildActive(id, active)
+      return active ? 0 : purgeChildFromUpcomingEvents(id)
+    },
+    onSuccess: () => {
+      invalidate()
+      qc.invalidateQueries({ queryKey: EVENTS_KEY })
+    },
   })
 }

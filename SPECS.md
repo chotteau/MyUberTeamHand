@@ -167,6 +167,7 @@ Collections **supprimées** : `needs`, `offers`, `rides`, `notifications`, `invi
 - **Liaison automatique** : les enfants d'un parent = `children where parentEmails array-contains email`. Aucun token, aucune invitation, aucune action admin.
 - **Création de compte réservée aux emails déclarés** : la Cloud Function publique `isEmailDeclared` est appelée avant `createUserWithEmailAndPassword` ; un email absent de tout `parentEmails` est refusé (« Cet email n'est pas déclaré au club »). Même contrôle à la première connexion Google (déconnexion immédiate). Un compte existant n'est jamais recréé : « Un compte existe déjà — Mot de passe oublié ».
 - Un parent sans enfant actif ne voit pas le bloc « Ma voiture ».
+- **Désactivation (admin)** : désactiver un parent supprime sa voiture de tous les événements à venir (ses passagers passent « Sans voiture ») ; désactiver un enfant supprime son inscription et le retire des voitures des événements à venir. Les événements passés ne sont jamais modifiés (stats).
 - **Deux modes pour l'admin** : sur `/event/:id` (onglet Planning) il agit comme un parent, sans pouvoir destructif ; sur `/admin/event/:id` (depuis le Dashboard ou la liste admin) il voit le badge « Mode admin », un bouton **Modifier** l'événement et un ✕ pour retirer n'importe quelle voiture.
 - Le rôle `admin` est posé manuellement (script `setAdmin` ou console).
 

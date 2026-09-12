@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import toast from 'react-hot-toast'
 import { Users, UserRound, Upload, Plus, Pencil, Power, ChevronDown } from 'lucide-react'
 import { useChildren, useToggleChildActive } from '../../hooks/useChildren'
 import { useUsers, useToggleUserActive } from '../../hooks/useUsers'
@@ -55,7 +56,20 @@ export default function AdminFamilies() {
               expanded={expanded === child.id}
               onToggleExpand={() => setExpanded((e) => (e === child.id ? null : child.id))}
               onEdit={() => setEditing(child)}
-              onToggleActive={() => toggleActive.mutate({ id: child.id, active: !child.active })}
+              onToggleActive={() =>
+                toggleActive.mutate(
+                  { id: child.id, active: !child.active },
+                  {
+                    onSuccess: (n) =>
+                      toast.success(
+                        child.active
+                          ? `${child.firstName} désactivé${n ? ` · retiré de ${n} événement(s)` : ''}`
+                          : `${child.firstName} réactivé`,
+                      ),
+                    onError: () => toast.error('Échec'),
+                  },
+                )
+              }
             />
           ))}
         </div>
@@ -115,7 +129,20 @@ function AccountsSection() {
               </span>
               {u.role !== 'admin' && (
                 <button
-                  onClick={() => toggle.mutate({ uid: u.uid, active: !u.active })}
+                  onClick={() =>
+                    toggle.mutate(
+                      { uid: u.uid, active: !u.active },
+                      {
+                        onSuccess: (n) =>
+                          toast.success(
+                            u.active
+                              ? `Compte désactivé${n ? ` · voiture retirée de ${n} événement(s)` : ''}`
+                              : 'Compte réactivé',
+                          ),
+                        onError: () => toast.error('Échec'),
+                      },
+                    )
+                  }
                   className="btn-ghost p-2 text-slate-500"
                   aria-label="Activer/désactiver"
                   title={u.active ? 'Désactiver' : 'Activer'}

@@ -2,6 +2,7 @@ import {
   collection,
   deleteDoc,
   doc,
+  getDoc,
   getDocs,
   onSnapshot,
   serverTimestamp,
@@ -9,6 +10,8 @@ import {
   type Unsubscribe,
 } from 'firebase/firestore'
 import { db } from './firebase'
+import { listEvents } from './events'
+import { isEventEditable } from '../utils/dates'
 import { tripAddressFromChild } from '../utils/address'
 import type { Car, Child, Direction, Participant, TripAddress } from '../types'
 
@@ -293,4 +296,55 @@ export async function takeAll(
     }
   }
   await batch.commit()
+}
+
+// ---------------------------------------------------------------------------
+// Désactivation (admin) : nettoyage des événements à venir
+// ---------------------------------------------------------------------------
+
+/** Événements encore modifiables (à venir, programmés). */
+async function upcomingEditableEvents() {
+  return (await listEvents(new Date())).filter(isEventEditable)
+}
+
+/** Retire un enfant désactivé : inscription + présence dans les voitures, événements à venir. */
+export async function purgeChildFromUpcomingEvents(childId: string): Promise<number> {
+  let touched = 0
+  for (const ev of await upcomingEditableEvents()) {
+    const pRef = doc(participantsCol(ev.id), childId)
+    const carsSnap = await getDocs(carsCol(ev.id))
+    const batch = writeBatch(db)
+    let dirty = false
+    if ((await getDoc(pRef)).exists()) {
+      batch.delete(pRef)
+      dirty = true
+    }
+    for (const d of carsSnap.docs) {
+      const car = d.data() as Car
+      const pa = car.passengersAller.filter((id) => id !== childId)
+      const pr = car.passengersRetour.filter((id) => id !== childId)
+      if (pa.length !== car.passengersAller.length || pr.length !== car.passengersRetour.length) {
+        batch.update(d.ref, { passengersAller: pa, passengersRetour: pr, updatedAt: serverTimestamp() })
+        dirty = true
+      }
+    }
+    if (dirty) {
+      await batch.commit()
+      touched++
+    }
+  }
+  return touched
+}
+
+/** Retire la voiture d'un parent désactivé des événements à venir. */
+export async function purgeDriverFromUpcomingEvents(uid: string): Promise<number> {
+  let touched = 0
+  for (const ev of await upcomingEditableEvents()) {
+    const ref = doc(carsCol(ev.id), uid)
+    if ((await getDoc(ref)).exists()) {
+      await deleteDoc(ref)
+      touched++
+    }
+  }
+  return touched
 }
