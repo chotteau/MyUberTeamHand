@@ -97,7 +97,27 @@ export default function EventDetail({ adminMode = false }: { adminMode?: boolean
         </p>
       )}
 
-      {loadingBoard ? (
+      {event.status !== 'scheduled' ? (
+        <section
+          className={`card py-12 text-center ${
+            event.status === 'vacances' ? 'border-amber-200 bg-amber-50' : 'border-red-200 bg-red-50'
+          }`}
+        >
+          <div className="text-4xl">{event.status === 'vacances' ? '🏖️' : '❌'}</div>
+          <h2
+            className={`mt-2 text-2xl font-bold ${
+              event.status === 'vacances' ? 'text-amber-800' : 'text-red-700'
+            }`}
+          >
+            {event.status === 'vacances' ? 'Vacances scolaires' : 'Annulé'}
+          </h2>
+          <p className="mt-1 text-sm text-slate-500">
+            {event.status === 'vacances'
+              ? "Pas d'entraînement cette semaine — rien à organiser."
+              : 'Cet événement est annulé — rien à organiser.'}
+          </p>
+        </section>
+      ) : loadingBoard ? (
         <PageSpinner />
       ) : (
         <>
