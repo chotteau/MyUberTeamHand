@@ -24,6 +24,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (fbUser) => {
+      // Rester en « chargement » tant que le profil Firestore n'est pas résolu :
+      // les pages ne doivent jamais se rendre avec un profil null après connexion.
+      setLoading(true)
       setFirebaseUser(fbUser)
       if (fbUser) {
         try {

@@ -9,25 +9,30 @@ import { updateDisplayName, signOut } from '../services/auth'
 import { formatAddress } from '../utils/address'
 import { Spinner, PageSpinner } from '../components/ui/Spinner'
 import { ChildAddressesModal } from '../components/admin/ChildFormModal'
-import type { Child } from '../types'
+import type { Child, User } from '../types'
 
 export default function Profile() {
-  const { profile, isAdmin, refreshProfile } = useAuth()
+  const { profile } = useAuth()
+  if (!profile) return <PageSpinner />
+  // key : le formulaire est (ré)initialisé avec le prénom réellement enregistré.
+  return <ProfileContent key={profile.uid + profile.displayName} profile={profile} />
+}
+
+function ProfileContent({ profile }: { profile: User }) {
+  const { isAdmin, refreshProfile } = useAuth()
   const { data: myChildren } = useMyChildren()
   const { data: config } = useConfig()
-  const [displayName, setDisplayName] = useState(profile?.displayName ?? '')
+  const [displayName, setDisplayName] = useState(profile.displayName)
   const [editing, setEditing] = useState<Child | null>(null)
 
   const save = useMutation({
-    mutationFn: () => updateDisplayName(profile!.uid, displayName),
+    mutationFn: () => updateDisplayName(profile.uid, displayName),
     onSuccess: async () => {
       await refreshProfile()
       toast.success('Profil mis à jour')
     },
     onError: () => toast.error('Échec de la mise à jour'),
   })
-
-  if (!profile) return <PageSpinner />
 
   const base = (import.meta.env.VITE_APP_URL ?? window.location.origin).replace(/\/$/, '')
   const calendarUrl = config?.calendarToken
