@@ -21,11 +21,11 @@ export function EventStatusBadge({
   if (past && status === 'scheduled') {
     return <span className="badge bg-slate-100 text-slate-500">Passé</span>
   }
-  const s = EVENT_STATUS[status]
+  const s = EVENT_STATUS[status] ?? { label: status, cls: 'bg-slate-100 text-slate-500' }
   return <span className={`badge ${s.cls}`}>{s.label}</span>
 }
 
 export function EventTypeBadge({ type }: { type: EventType }) {
-  const t = EVENT_TYPE[type]
+  const t = EVENT_TYPE[type] ?? { label: type, cls: 'bg-slate-100 text-slate-500' }
   return <span className={`badge ${t.cls}`}>{t.label}</span>
 }

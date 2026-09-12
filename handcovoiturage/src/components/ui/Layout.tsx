@@ -1,7 +1,8 @@
-import { NavLink, Outlet, useNavigate } from 'react-router-dom'
+import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { Calendar, BarChart3, User, Settings, LogOut } from 'lucide-react'
 import { useAuth } from '../../hooks/useAuth'
 import { signOut } from '../../services/auth'
+import { ErrorBoundary } from './ErrorBoundary'
 
 interface NavItem {
   to: string
@@ -20,6 +21,7 @@ const NAV: NavItem[] = [
 export function Layout() {
   const { isAdmin, profile } = useAuth()
   const navigate = useNavigate()
+  const location = useLocation()
   const items = NAV.filter((i) => !i.adminOnly || isAdmin)
 
   async function handleSignOut() {
@@ -68,7 +70,9 @@ export function Layout() {
 
       {/* Contenu */}
       <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-4 pb-24 md:px-6 md:py-6 md:pb-6">
-        <Outlet />
+        <ErrorBoundary resetKey={location.pathname}>
+          <Outlet />
+        </ErrorBoundary>
       </main>
 
       {/* Barre de navigation (mobile) */}

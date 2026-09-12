@@ -20,7 +20,7 @@ export function EventSummary({
         {formatTime(event.departureTime)}
         {event.returnTime ? ` → ${formatTime(event.returnTime)}` : ''}
       </span>
-      {event.location.name && (
+      {event.location?.name && (
         <span className="flex items-center gap-1">
           <MapPin className={icon} />
           {event.location.name}
