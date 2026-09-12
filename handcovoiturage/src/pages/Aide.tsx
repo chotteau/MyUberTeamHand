@@ -9,6 +9,7 @@ import {
   User as UserIcon,
   ArrowRight,
   Lightbulb,
+  Smartphone,
 } from 'lucide-react'
 import { useAuth } from '../hooks/useAuth'
 
@@ -110,6 +111,29 @@ export default function Aide() {
               Votre prénom affiché (celui que les autres voient en tête de colonne), les adresses de
               vos enfants (par défaut, et une deuxième si besoin), le lien du calendrier.
             </p>
+          </Step>
+
+          <Step n={8} icon={<Smartphone className="h-5 w-5" />} title="L'installer sur son téléphone">
+            <p>
+              Pas d'application à télécharger : ajoutez le site à l'écran d'accueil, il s'ouvre
+              ensuite comme une app, plein écran, avec son icône 🤾.
+            </p>
+            <ul className="space-y-1.5 pl-1">
+              <li>
+                <b>iPhone / iPad (Safari)</b> : ouvrez <span className="font-mono text-xs">myuberteamhand.web.app</span>,
+                touchez le bouton <b>Partager</b> (le carré avec la flèche, en bas de l'écran), puis{' '}
+                <b>Sur l'écran d'accueil</b> → <b>Ajouter</b>.
+              </li>
+              <li>
+                <b>Android (Chrome)</b> : ouvrez le site, touchez le menu <b>⋮</b> en haut à droite,
+                puis <b>Ajouter à l'écran d'accueil</b> (ou <b>Installer l'application</b>) →{' '}
+                <b>Installer</b>.
+              </li>
+            </ul>
+            <Tip>
+              Sur iPhone, il faut passer par Safari : depuis Chrome ou le navigateur intégré de WhatsApp,
+              l'option n'apparaît pas. Copiez le lien et ouvrez-le dans Safari.
+            </Tip>
           </Step>
         </div>
 
