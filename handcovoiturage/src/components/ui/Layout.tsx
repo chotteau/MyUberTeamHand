@@ -60,9 +60,12 @@ export function Layout() {
             <button
               onClick={handleSignOut}
               className="ml-2 flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-slate-500 hover:bg-slate-100"
+              aria-label="Se déconnecter"
+              title="Se déconnecter"
             >
               <LogOut className="h-4 w-4" />
               <span className="hidden lg:inline">{profile?.displayName}</span>
+              <span className="lg:hidden">Quitter</span>
             </button>
           </nav>
         </div>
@@ -92,6 +95,14 @@ export function Layout() {
               {label}
             </NavLink>
           ))}
+          <button
+            onClick={handleSignOut}
+            className="flex flex-1 flex-col items-center gap-0.5 py-2 text-xs font-medium text-slate-500"
+            aria-label="Se déconnecter"
+          >
+            <LogOut className="h-5 w-5" />
+            Quitter
+          </button>
         </div>
       </nav>
     </div>
