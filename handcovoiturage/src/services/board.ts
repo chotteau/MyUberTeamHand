@@ -309,42 +309,43 @@ async function upcomingEditableEvents() {
 
 /** Retire un enfant désactivé : inscription + présence dans les voitures, événements à venir. */
 export async function purgeChildFromUpcomingEvents(childId: string): Promise<number> {
-  let touched = 0
-  for (const ev of await upcomingEditableEvents()) {
-    const pRef = doc(participantsCol(ev.id), childId)
-    const carsSnap = await getDocs(carsCol(ev.id))
-    const batch = writeBatch(db)
-    let dirty = false
-    if ((await getDoc(pRef)).exists()) {
-      batch.delete(pRef)
-      dirty = true
-    }
-    for (const d of carsSnap.docs) {
-      const car = d.data() as Car
-      const pa = car.passengersAller.filter((id) => id !== childId)
-      const pr = car.passengersRetour.filter((id) => id !== childId)
-      if (pa.length !== car.passengersAller.length || pr.length !== car.passengersRetour.length) {
-        batch.update(d.ref, { passengersAller: pa, passengersRetour: pr, updatedAt: serverTimestamp() })
+  const events = await upcomingEditableEvents()
+  const results = await Promise.all(
+    events.map(async (ev) => {
+      const pRef = doc(participantsCol(ev.id), childId)
+      const [pSnap, carsSnap] = await Promise.all([getDoc(pRef), getDocs(carsCol(ev.id))])
+      const batch = writeBatch(db)
+      let dirty = false
+      if (pSnap.exists()) {
+        batch.delete(pRef)
         dirty = true
       }
-    }
-    if (dirty) {
-      await batch.commit()
-      touched++
-    }
-  }
-  return touched
+      for (const d of carsSnap.docs) {
+        const car = d.data() as Car
+        const pa = car.passengersAller.filter((id) => id !== childId)
+        const pr = car.passengersRetour.filter((id) => id !== childId)
+        if (pa.length !== car.passengersAller.length || pr.length !== car.passengersRetour.length) {
+          batch.update(d.ref, { passengersAller: pa, passengersRetour: pr, updatedAt: serverTimestamp() })
+          dirty = true
+        }
+      }
+      if (dirty) await batch.commit()
+      return dirty ? 1 : 0
+    }),
+  )
+  return results.reduce((a, b) => a + b, 0)
 }
 
 /** Retire la voiture d'un parent désactivé des événements à venir. */
 export async function purgeDriverFromUpcomingEvents(uid: string): Promise<number> {
-  let touched = 0
-  for (const ev of await upcomingEditableEvents()) {
-    const ref = doc(carsCol(ev.id), uid)
-    if ((await getDoc(ref)).exists()) {
+  const events = await upcomingEditableEvents()
+  const results = await Promise.all(
+    events.map(async (ev) => {
+      const ref = doc(carsCol(ev.id), uid)
+      if (!(await getDoc(ref)).exists()) return 0
       await deleteDoc(ref)
-      touched++
-    }
-  }
-  return touched
+      return 1
+    }),
+  )
+  return results.reduce((a, b) => a + b, 0)
 }

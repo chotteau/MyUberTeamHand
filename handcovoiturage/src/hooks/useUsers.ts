@@ -16,6 +16,8 @@ export function useToggleUserActive() {
   return useMutation({
     mutationFn: async ({ uid, active }: { uid: string; active: boolean }) => {
       await setUserActive(uid, active)
+      // La liste reflète le statut tout de suite ; le nettoyage continue derrière.
+      qc.invalidateQueries({ queryKey: USERS_KEY })
       return active ? 0 : purgeDriverFromUpcomingEvents(uid)
     },
     onSuccess: () => {

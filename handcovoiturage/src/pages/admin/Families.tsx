@@ -5,7 +5,7 @@ import { useChildren, useToggleChildActive } from '../../hooks/useChildren'
 import { useUsers, useToggleUserActive } from '../../hooks/useUsers'
 import { ImportCSV } from '../../components/admin/ImportCSV'
 import { ChildFormModal } from '../../components/admin/ChildFormModal'
-import { PageSpinner } from '../../components/ui/Spinner'
+import { PageSpinner, Spinner } from '../../components/ui/Spinner'
 import { formatAddress } from '../../utils/address'
 import type { Child } from '../../types'
 
@@ -56,6 +56,7 @@ export default function AdminFamilies() {
               expanded={expanded === child.id}
               onToggleExpand={() => setExpanded((e) => (e === child.id ? null : child.id))}
               onEdit={() => setEditing(child)}
+              pending={toggleActive.isPending && toggleActive.variables?.id === child.id}
               onToggleActive={() =>
                 toggleActive.mutate(
                   { id: child.id, active: !child.active },
@@ -143,11 +144,16 @@ function AccountsSection() {
                       },
                     )
                   }
+                  disabled={toggle.isPending && toggle.variables?.uid === u.uid}
                   className="btn-ghost p-2 text-slate-500"
                   aria-label="Activer/désactiver"
                   title={u.active ? 'Désactiver' : 'Activer'}
                 >
-                  <Power className="h-4 w-4" />
+                  {toggle.isPending && toggle.variables?.uid === u.uid ? (
+                    <Spinner className="h-4 w-4" />
+                  ) : (
+                    <Power className="h-4 w-4" />
+                  )}
                 </button>
               )}
             </div>
@@ -170,6 +176,7 @@ function ChildRow({
   onToggleExpand: () => void
   onEdit: () => void
   onToggleActive: () => void
+  pending?: boolean
 }) {
   return (
     <div className={`card !p-0 ${child.active ? '' : 'opacity-60'}`}>
@@ -191,8 +198,8 @@ function ChildRow({
           <button onClick={onEdit} className="btn-ghost p-2 text-slate-500" aria-label="Modifier">
             <Pencil className="h-4 w-4" />
           </button>
-          <button onClick={onToggleActive} className="btn-ghost p-2 text-slate-500" aria-label="Activer/désactiver">
-            <Power className="h-4 w-4" />
+          <button onClick={onToggleActive} disabled={pending} className="btn-ghost p-2 text-slate-500" aria-label="Activer/désactiver">
+            {pending ? <Spinner className="h-4 w-4" /> : <Power className="h-4 w-4" />}
           </button>
         </div>
       </div>

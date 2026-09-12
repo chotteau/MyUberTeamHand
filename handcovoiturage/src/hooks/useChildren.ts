@@ -61,6 +61,7 @@ export function useToggleChildActive() {
   return useMutation({
     mutationFn: async ({ id, active }: { id: string; active: boolean }) => {
       await setChildActive(id, active)
+      qc.invalidateQueries({ queryKey: CHILDREN_KEY })
       return active ? 0 : purgeChildFromUpcomingEvents(id)
     },
     onSuccess: () => {
