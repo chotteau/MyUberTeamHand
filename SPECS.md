@@ -273,7 +273,7 @@ RETOUR — départ 19:00
 Mis à jour le 12/09 à 14:32 — https://myuberteamhand.web.app/event/xxx
 ```
 - Prénoms uniquement, adresses de prise en charge (voulues par l'équipe), **jamais** d'email.
-- `Cache-Control: max-age=300`. Les clients calendrier se resynchronisent périodiquement (Google : quelques heures ; Apple : réglable).
+- `Cache-Control: max-age=60`. Les clients calendrier se resynchronisent périodiquement (Google : quelques heures ; Apple : réglable).
 
 ### 2.8 Statistiques
 

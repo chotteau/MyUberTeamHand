@@ -195,7 +195,7 @@ export const calendarExport = onRequest({ region: 'europe-west1' }, async (req, 
 
     res.set('Content-Type', 'text/calendar; charset=utf-8')
     res.set('Content-Disposition', 'inline; filename="handcovoiturage.ics"')
-    res.set('Cache-Control', 'public, max-age=300')
+    res.set('Cache-Control', 'public, max-age=60')
     res.status(200).send(lines.join('\r\n'))
   } catch (e) {
     logger.error('Échec export ICS', e)
