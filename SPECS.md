@@ -254,7 +254,7 @@ Total             │    2    │     1     │     │    1    │    2     │
 
 URL d'abonnement : `/api/calendar/{calendarToken}.ics` (token = `config.calendarToken`, regénérable par l'admin ; une URL sans token valide renvoie 404).
 
-- **Un VEVENT par événement** (pas par voiture) : de `date − 7 j` à `seasonEnd`, statuts `scheduled` + annulés (avec `STATUS:CANCELLED` et préfixe « ❌ »).
+- **Un VEVENT par événement** (pas par voiture) : événements **non terminés** uniquement (fin > maintenant) jusqu’à `seasonEnd`, statuts `scheduled` + annulés (avec `STATUS:CANCELLED` et préfixe « ❌ »).
 - `SUMMARY` : `🤾 Entraînement Lundi` / `🏆 Match vs Montpellier` / `❌ Entraînement Lundi (vacances)`
 - `DTSTART` = `departureTime`, `DTEND` = `returnTime` (ou `departureTime + 2 h`)
 - `LOCATION` = lieu de l'événement

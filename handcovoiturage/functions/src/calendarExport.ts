@@ -151,7 +151,8 @@ export const calendarExport = onRequest({ region: 'europe-west1' }, async (req, 
     const seasonEnd = cfgSnap.get('seasonEnd') as Timestamp | undefined
     const appUrl = (process.env.APP_URL || 'https://myuberteamhand.web.app').replace(/\/$/, '')
 
-    const from = Timestamp.fromMillis(Date.now() - 7 * 24 * 3600 * 1000)
+    // Uniquement les événements non terminés : le calendrier sert à s'organiser, pas à archiver.
+    const from = Timestamp.fromMillis(Date.now() - 24 * 3600 * 1000)
     let q = db.collection('events').where('date', '>=', from)
     if (seasonEnd) q = q.where('date', '<=', seasonEnd)
     const eventsSnap = await q.orderBy('date', 'asc').get()
@@ -169,13 +170,6 @@ export const calendarExport = onRequest({ region: 'europe-west1' }, async (req, 
 
     for (const d of eventsSnap.docs) {
       const ev = { id: d.id, ...(d.data() as Omit<EventDoc, 'id'>) }
-      const [pSnap, cSnap] = await Promise.all([
-        d.ref.collection('participants').get(),
-        d.ref.collection('cars').get(),
-      ])
-      const participants = pSnap.docs.map((x) => x.data() as Participant)
-      const cars = cSnap.docs.map((x) => x.data() as Car)
-
       const cancelled = ev.status !== 'scheduled'
       const emoji = ev.type === 'match' ? '🏆' : '🤾'
       const suffix = ev.status === 'vacances' ? ' (vacances)' : ev.status === 'cancelled' ? ' (annulé)' : ''
@@ -183,6 +177,14 @@ export const calendarExport = onRequest({ region: 'europe-west1' }, async (req, 
 
       const start = ev.departureTime.toDate()
       const end = ev.returnTime ? ev.returnTime.toDate() : new Date(start.getTime() + 2 * 3600 * 1000)
+      if (end < now) continue
+
+      const [pSnap, cSnap] = await Promise.all([
+        d.ref.collection('participants').get(),
+        d.ref.collection('cars').get(),
+      ])
+      const participants = pSnap.docs.map((x) => x.data() as Participant)
+      const cars = cSnap.docs.map((x) => x.data() as Car)
 
       const desc: string[] = cancelled
         ? [`Événement ${ev.status === 'vacances' ? 'annulé (vacances scolaires)' : 'annulé'}.`]
