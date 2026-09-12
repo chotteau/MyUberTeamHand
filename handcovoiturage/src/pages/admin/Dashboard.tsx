@@ -10,7 +10,7 @@ import { KpiCard } from '../../components/ui/KpiCard'
 import { formatShortDateTime, formatDayMonth, isEventEditable } from '../../utils/dates'
 
 export default function Dashboard() {
-  const { data: events, isLoading } = useEvents('two-weeks')
+  const { data: events, isLoading } = useEvents('upcoming')
   const { data: children } = useChildren()
   const { data: config } = useConfig()
 
@@ -50,7 +50,7 @@ export default function Dashboard() {
       ) : (
         <>
           <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-            <KpiCard icon={<CalendarDays className="h-5 w-5" />} label="Événements (2 sem.)" value={upcoming.length} />
+            <KpiCard icon={<CalendarDays className="h-5 w-5" />} label="Événements (4 sem.)" value={upcoming.length} />
             <KpiCard icon={<Users className="h-5 w-5" />} label="Familles actives" value={(children ?? []).filter((c) => c.active).length} />
             <KpiCard icon={<AlertTriangle className="h-5 w-5" />} label="Alertes" value={alerts.length} tone={alerts.length ? 'warning' : 'default'} />
             <KpiCard

@@ -30,7 +30,7 @@ export async function signOut() {
 
 export async function getUserProfile(uid: string): Promise<User | null> {
   const snap = await getDoc(doc(db, 'users', uid))
-  return snap.exists() ? (snap.data() as User) : null
+  return snap.exists() ? ({ active: true, ...snap.data() } as User) : null
 }
 
 export async function updateDisplayName(uid: string, displayName: string) {
@@ -51,7 +51,7 @@ export async function ensureUserDoc(fbUser: FbUser): Promise<User> {
   const snap = await getDoc(ref)
 
   if (snap.exists() && snap.get('displayName')) {
-    return snap.data() as User
+    return { active: true, ...snap.data() } as User
   }
 
   let displayName = ''
@@ -72,9 +72,10 @@ export async function ensureUserDoc(fbUser: FbUser): Promise<User> {
       email,
       displayName,
       role: 'parent',
+      active: true,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     })
   }
-  return (await getDoc(ref)).data() as User
+  return { active: true, ...(await getDoc(ref)).data() } as User
 }

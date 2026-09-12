@@ -21,3 +21,4 @@ handcovoiturage/.env.local
 # IDE
 .DS_Store
 *.log
+familles-import.csv

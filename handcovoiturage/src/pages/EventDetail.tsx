@@ -39,6 +39,8 @@ export default function EventDetail() {
   const past = isEventPast(event)
   const hasReturn = !!event.returnTime
   const myCar = cars.find((c) => c.id === profile.uid)
+  // Un enfant désactivé par l'admin ne peut plus être inscrit.
+  const activeChildren = (myChildren ?? []).filter((c) => c.active)
 
   return (
     <div className="space-y-4">
@@ -80,7 +82,7 @@ export default function EventDetail() {
               <MyChildrenBlock
                 eventId={event.id}
                 uid={profile.uid}
-                children={myChildren ?? []}
+                children={activeChildren}
                 participants={participants}
                 cars={cars}
                 hasReturn={hasReturn}
@@ -91,7 +93,7 @@ export default function EventDetail() {
                 driver={{
                   uid: profile.uid,
                   name: profile.displayName || 'Chauffeur',
-                  children: myChildren ?? [],
+                  children: activeChildren,
                 }}
                 myCar={myCar}
                 participants={participants}

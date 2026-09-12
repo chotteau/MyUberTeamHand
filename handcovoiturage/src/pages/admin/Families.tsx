@@ -1,6 +1,7 @@
 import { useState } from 'react'
-import { Users, Upload, Plus, Pencil, Power, ChevronDown } from 'lucide-react'
+import { Users, UserRound, Upload, Plus, Pencil, Power, ChevronDown } from 'lucide-react'
 import { useChildren, useToggleChildActive } from '../../hooks/useChildren'
+import { useUsers, useToggleUserActive } from '../../hooks/useUsers'
 import { ImportCSV } from '../../components/admin/ImportCSV'
 import { ChildFormModal } from '../../components/admin/ChildFormModal'
 import { PageSpinner } from '../../components/ui/Spinner'
@@ -60,10 +61,73 @@ export default function AdminFamilies() {
         </div>
       )}
 
+      <AccountsSection />
+
       {editing && (
         <ChildFormModal child={editing === 'new' ? null : editing} onClose={() => setEditing(null)} />
       )}
     </div>
+  )
+}
+
+/** Comptes ayant déjà ouvert l'app : activer / désactiver un parent. */
+function AccountsSection() {
+  const { data: users, isLoading } = useUsers()
+  const toggle = useToggleUserActive()
+  const { data: children } = useChildren()
+
+  const childrenOf = (email: string) =>
+    (children ?? [])
+      .filter((c) => c.parentEmails.includes(email))
+      .map((c) => c.firstName)
+      .join(', ')
+
+  return (
+    <section className="space-y-2">
+      <h2 className="flex items-center gap-2 text-sm font-semibold text-slate-600">
+        <UserRound className="h-4 w-4 text-primary" />
+        Comptes connectés
+      </h2>
+      <p className="text-xs text-slate-400">
+        Un parent apparaît ici après sa première connexion. Un compte désactivé ne peut plus
+        ouvrir l'app ni déclarer de voiture.
+      </p>
+      {isLoading ? (
+        <PageSpinner />
+      ) : !users || users.length === 0 ? (
+        <div className="card py-6 text-center text-sm text-slate-400">Aucun compte pour l'instant.</div>
+      ) : (
+        users.map((u) => (
+          <div key={u.uid} className={`card flex items-center justify-between !p-3 ${u.active ? '' : 'opacity-60'}`}>
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 font-medium text-secondary">
+                {u.displayName || '(sans prénom)'}
+                {u.role === 'admin' && <span className="badge bg-secondary text-white">Admin</span>}
+              </div>
+              <div className="truncate text-xs text-slate-400">
+                {u.email}
+                {childrenOf(u.email) ? ` · ${childrenOf(u.email)}` : ' · aucun enfant associé'}
+              </div>
+            </div>
+            <div className="flex shrink-0 items-center gap-1">
+              <span className={`badge ${u.active ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-500'}`}>
+                {u.active ? 'Actif' : 'Désactivé'}
+              </span>
+              {u.role !== 'admin' && (
+                <button
+                  onClick={() => toggle.mutate({ uid: u.uid, active: !u.active })}
+                  className="btn-ghost p-2 text-slate-500"
+                  aria-label="Activer/désactiver"
+                  title={u.active ? 'Désactiver' : 'Activer'}
+                >
+                  <Power className="h-4 w-4" />
+                </button>
+              )}
+            </div>
+          </div>
+        ))
+      )}
+    </section>
   )
 }
 

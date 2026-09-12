@@ -69,6 +69,7 @@ export interface User {
   email: string
   displayName: string // prénom seul
   role: Role
+  active: boolean // false → compte désactivé par l'admin (plus d'accès à l'app)
   createdAt: Timestamp
   updatedAt: Timestamp
 }

@@ -10,7 +10,7 @@ import { formatDate, isEventPast } from '../utils/dates'
 import type { Child, Event } from '../types'
 
 export default function Planning() {
-  const [range, setRange] = useState<EventsRange>('two-weeks')
+  const [range, setRange] = useState<EventsRange>('upcoming')
   const { data: events, isLoading } = useEvents(range)
   const { data: myChildren } = useMyChildren()
 
@@ -22,10 +22,10 @@ export default function Planning() {
           Planning
         </h1>
         <button
-          onClick={() => setRange(range === 'two-weeks' ? 'season' : 'two-weeks')}
+          onClick={() => setRange(range === 'upcoming' ? 'season' : 'upcoming')}
           className="btn-ghost text-xs text-primary"
         >
-          {range === 'two-weeks' ? 'Voir toute la saison' : 'Voir 2 semaines'}
+          {range === 'upcoming' ? 'Voir toute la saison' : 'Voir 4 semaines'}
         </button>
       </div>
 

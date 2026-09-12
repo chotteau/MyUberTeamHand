@@ -18,13 +18,13 @@ import { isEventPast } from '../../utils/dates'
 import type { Event, EventStatus } from '../../types'
 
 const RANGES: { value: EventsRange; label: string }[] = [
-  { value: 'two-weeks', label: '2 semaines' },
+  { value: 'upcoming', label: '4 semaines' },
   { value: 'season', label: 'Saison' },
   { value: 'past', label: 'Passés' },
 ]
 
 export default function AdminEvents() {
-  const [range, setRange] = useState<EventsRange>('two-weeks')
+  const [range, setRange] = useState<EventsRange>('upcoming')
   const { data: events, isLoading } = useEvents(range)
   const setStatus = useSetEventStatus()
   const deleteEvent = useDeleteEvent()

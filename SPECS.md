@@ -35,6 +35,7 @@ Permet aux parents de coordonner les trajets (entraînements + matchs) de maniè
   email: string,                  // en minuscules
   displayName: string,            // prénom seul ("Jean") — pas de nom de famille
   role: 'admin' | 'parent',
+  active: boolean,                // false → désactivé par l'admin : écran bloquant, aucune écriture
   createdAt: Timestamp,
   updatedAt: Timestamp
 }
@@ -293,15 +294,15 @@ Page accessible à tous — **vue saison uniquement**.
 
 ### 3.2 Parent
 - `/` → `/planning`
-- `/planning` — 2 semaines glissantes (bouton « Voir toute la saison »). Par événement : date/heure/lieu, badge statut, et **résumé** : « Lucas : aller ✔ retour ✔ » / « À déclarer », « 3 voitures · 1 enfant sans voiture ».
+- `/planning` — 4 semaines glissantes (bouton « Voir toute la saison »). Par événement : date/heure/lieu, badge statut, et **résumé** : « Lucas : aller ✔ retour ✔ » / « À déclarer », « 3 voitures · 1 enfant sans voiture ».
 - `/event/:id` — en-tête + « Mes enfants » (2.4) + « Ma voiture » (2.5) + matrice (2.6)
 - `/stats`
 - `/mon-profil` — prénom ; adresses par défaut / secondaire de mes enfants
 
 ### 3.3 Admin (en plus)
 - `/admin` — événements de la semaine, alertes (enfants sans voiture, événements sans voiture), dernière sync ICS
-- `/admin/evenements` — liste 2 semaines / saison, passés grisés, sync ICS, créer / modifier / annuler / `vacances` / réactiver. Suppression réservée aux `manual`.
-- `/admin/familles` — liste, import CSV, fiche enfant (prénom, parents, adresses, actif)
+- `/admin/evenements` — liste 4 semaines / saison, passés grisés, sync ICS, créer / modifier / annuler / `vacances` / réactiver. Suppression réservée aux `manual`.
+- `/admin/familles` — liste, import CSV, fiche enfant (prénom, parents, adresses, actif) ; section **Comptes connectés** : activer / désactiver un parent (compte désactivé = écran bloquant + règles Firestore refusent ses écritures)
 - `/admin/config` — saison, 2 jours d'entraînement, URL ICS, nom + token du calendrier (bouton « Regénérer le lien »), seuil orange, bouton « Générer / Regénérer le calendrier »
 
 ---

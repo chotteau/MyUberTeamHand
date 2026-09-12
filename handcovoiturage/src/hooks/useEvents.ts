@@ -13,18 +13,18 @@ import type { Event, EventStatus } from '../types'
 
 export const EVENTS_KEY = ['events']
 
-export type EventsRange = 'two-weeks' | 'season' | 'past'
+export type EventsRange = 'upcoming' | 'season' | 'past'
 
 /**
- * Événements selon la fenêtre : 2 semaines glissantes (défaut), toute la
+ * Événements selon la fenêtre : 4 semaines glissantes (défaut), toute la
  * saison à venir, ou les 4 dernières semaines (passés).
  */
-export function useEvents(range: EventsRange = 'two-weeks') {
+export function useEvents(range: EventsRange = 'upcoming') {
   const today = startOfDay(new Date())
   return useQuery({
     queryKey: [...EVENTS_KEY, range, today.toISOString()],
     queryFn: () => {
-      if (range === 'two-weeks') return listEvents(today, addWeeks(today, 2))
+      if (range === 'upcoming') return listEvents(today, addWeeks(today, 4))
       if (range === 'past') return listEvents(addWeeks(today, -4), today)
       return listEvents(today)
     },

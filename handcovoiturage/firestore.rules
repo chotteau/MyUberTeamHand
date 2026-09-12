@@ -8,6 +8,11 @@ service cloud.firestore {
       return isAuth() &&
         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
     }
+    // Compte non désactivé par l'admin (champ absent = actif).
+    function isActive() {
+      let u = get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+      return !('active' in u) || u.active == true;
+    }
     function isParentOf(childId) {
       return email() in get(/databases/$(database)/documents/children/$(childId)).data.parentEmails;
     }
@@ -22,7 +27,8 @@ service cloud.firestore {
     match /users/{uid} {
       allow read: if isAuth() && (request.auth.uid == uid || isAdmin());
       allow create: if isAuth() && request.auth.uid == uid
-                    && request.resource.data.role == 'parent';
+                    && request.resource.data.role == 'parent'
+                    && request.resource.data.active == true;
       allow update: if isAdmin()
                     || (isAuth() && request.auth.uid == uid
                         && onlyKeys(['displayName', 'updatedAt']));
@@ -44,7 +50,7 @@ service cloud.firestore {
       match /participants/{childId} {
         allow read: if isAuth();
         allow write: if isAdmin()
-                     || (isAuth() && isParentOf(childId) && eventEditable(eventId)
+                     || (isAuth() && isActive() && isParentOf(childId) && eventEditable(eventId)
                          && (request.method == 'delete'
                              || request.resource.data.childId == childId));
       }
@@ -54,9 +60,9 @@ service cloud.firestore {
       match /cars/{driverUid} {
         allow read: if isAuth();
         allow create, delete: if isAdmin()
-                     || (isAuth() && request.auth.uid == driverUid && eventEditable(eventId));
+                     || (isAuth() && isActive() && request.auth.uid == driverUid && eventEditable(eventId));
         allow update: if isAdmin()
-                     || (isAuth() && eventEditable(eventId) && (
+                     || (isAuth() && isActive() && eventEditable(eventId) && (
                           request.auth.uid == driverUid
                           || onlyKeys(['passengersAller', 'passengersRetour', 'updatedAt'])
                         ));
