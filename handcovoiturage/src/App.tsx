@@ -4,6 +4,7 @@ import { AdminLayout } from './components/admin/AdminLayout'
 import { PrivateRoute } from './components/ui/PrivateRoute'
 
 import Login from './pages/Login'
+import Aide from './pages/Aide'
 import ResetPassword from './pages/ResetPassword'
 import Planning from './pages/Planning'
 import EventDetail from './pages/EventDetail'
@@ -20,6 +21,7 @@ export default function App() {
       <Routes>
         <Route path="/login" element={<Login />} />
         <Route path="/reset-password" element={<ResetPassword />} />
+        <Route path="/aide" element={<Aide />} />
 
         <Route element={<PrivateRoute />}>
           <Route element={<Layout />}>

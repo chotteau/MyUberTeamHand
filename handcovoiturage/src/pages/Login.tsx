@@ -163,9 +163,12 @@ export default function Login() {
           Continuer avec Google
         </button>
 
-        <p className="mt-6 text-center text-sm text-slate-500">
+        <p className="mt-6 flex justify-center gap-4 text-center text-sm text-slate-500">
           <Link to="/reset-password" className="text-primary hover:underline">
             Mot de passe oublié ?
+          </Link>
+          <Link to="/aide" className="text-primary hover:underline">
+            Comment ça marche ?
           </Link>
         </p>
       </div>

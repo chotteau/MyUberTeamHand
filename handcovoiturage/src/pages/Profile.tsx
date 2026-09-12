@@ -1,7 +1,8 @@
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
 import { useMutation } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
-import { User as UserIcon, Mail, Baby, CalendarPlus, Shield, Pencil } from 'lucide-react'
+import { User as UserIcon, Mail, Baby, CalendarPlus, Shield, Pencil, CircleHelp } from 'lucide-react'
 import { useAuth } from '../hooks/useAuth'
 import { useMyChildren } from '../hooks/useChildren'
 import { useConfig } from '../hooks/useConfig'
@@ -151,6 +152,11 @@ function ProfileContent({ profile }: { profile: User }) {
           </>
         )}
       </section>
+
+      <Link to="/aide" className="btn-ghost w-full text-slate-500">
+        <CircleHelp className="h-4 w-4" />
+        Mode d'emploi (lien à partager)
+      </Link>
 
       {editing && <ChildAddressesModal child={editing} onClose={() => setEditing(null)} />}
     </div>

@@ -299,6 +299,7 @@ Page accessible à tous — **vue saison uniquement**.
 ### 3.1 Publics
 - `/login` — email/mdp + Google
 - `/reset-password`
+- `/aide` — mode d’emploi une page (création de compte, planning, inscription, voiture, matrice, calendrier, profil), partageable par lien ; lié depuis le login et le profil
 
 ### 3.2 Parent
 - `/` → `/planning`
