@@ -1,4 +1,5 @@
 import {
+  createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
   signInWithPopup,
   sendPasswordResetEmail,
@@ -12,6 +13,12 @@ import type { User } from '../types'
 
 export async function signInWithEmail(email: string, password: string) {
   const cred = await signInWithEmailAndPassword(auth, email, password)
+  return cred.user
+}
+
+/** Création d'un compte email / mot de passe (le profil est créé par ensureUserDoc). */
+export async function registerWithEmail(email: string, password: string) {
+  const cred = await createUserWithEmailAndPassword(auth, email.trim().toLowerCase(), password)
   return cred.user
 }
 

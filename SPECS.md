@@ -160,7 +160,7 @@ Collections **supprimées** : `needs`, `offers`, `rides`, `notifications`, `invi
 
 ### 2.1 Authentification et liaison parent ↔ enfant
 
-- Email / mot de passe + Google OAuth (Firebase Auth), récupération de mot de passe par email Firebase (seul email du système, géré par Firebase).
+- **Création de compte** email / mot de passe depuis la page de login (onglet « Créer un compte »), connexion email / mot de passe ou Google OAuth (Firebase Auth), récupération de mot de passe par email Firebase (seul email du système, géré par Firebase).
 - À chaque connexion, `ensureUserDoc` crée/complète `users/{uid}` :
   - `email` = email du compte en minuscules
   - `displayName` = si absent, le `parents[].firstName` trouvé dans `children` pour cet email, sinon le prénom Google, sinon demandé à l'écran.
