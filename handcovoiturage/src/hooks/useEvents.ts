@@ -40,19 +40,29 @@ export function useEvent(id: string | undefined) {
 }
 
 /** Résumé aller / retour d'un événement (compteurs dérivés). */
-export function useEventSummary(eventId: string) {
-  return useQuery({
+export async function fetchEventSummary(eventId: string) {
+  const board = await getBoard(eventId)
+  return {
+    board,
+    aller: summarizeDirection(board, 'aller'),
+    retour: summarizeDirection(board, 'retour'),
+  }
+}
+
+/**
+ * Options de requête partagées (Planning, Dashboard…) : une seule clé, une
+ * seule forme de données — sinon le cache TanStack sert l'objet d'une page à l'autre.
+ */
+export function eventSummaryQuery(eventId: string) {
+  return {
     queryKey: [...EVENTS_KEY, eventId, 'summary'],
-    queryFn: async () => {
-      const board = await getBoard(eventId)
-      return {
-        board,
-        aller: summarizeDirection(board, 'aller'),
-        retour: summarizeDirection(board, 'retour'),
-      }
-    },
+    queryFn: () => fetchEventSummary(eventId),
     staleTime: 15_000,
-  })
+  }
+}
+
+export function useEventSummary(eventId: string) {
+  return useQuery(eventSummaryQuery(eventId))
 }
 
 function useInvalidateEvents() {

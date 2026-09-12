@@ -1,10 +1,9 @@
 import { Link } from 'react-router-dom'
 import { useQueries } from '@tanstack/react-query'
 import { LayoutDashboard, CalendarDays, Users, RefreshCw, Settings, ChevronRight, AlertTriangle } from 'lucide-react'
-import { useEvents } from '../../hooks/useEvents'
+import { eventSummaryQuery, useEvents } from '../../hooks/useEvents'
 import { useChildren } from '../../hooks/useChildren'
 import { useConfig } from '../../hooks/useConfig'
-import { getBoard, summarizeDirection } from '../../services/board'
 import { PageSpinner } from '../../components/ui/Spinner'
 import { KpiCard } from '../../components/ui/KpiCard'
 import { formatShortDateTime, formatDayMonth, isEventEditable } from '../../utils/dates'
@@ -15,16 +14,7 @@ export default function Dashboard() {
   const { data: config } = useConfig()
 
   const upcoming = (events ?? []).filter(isEventEditable)
-  const boards = useQueries({
-    queries: upcoming.map((e) => ({
-      queryKey: ['events', e.id, 'summary'],
-      queryFn: async () => {
-        const board = await getBoard(e.id)
-        return { aller: summarizeDirection(board, 'aller'), retour: summarizeDirection(board, 'retour') }
-      },
-      staleTime: 15_000,
-    })),
-  })
+  const boards = useQueries({ queries: upcoming.map((e) => eventSummaryQuery(e.id)) })
 
   const alerts = upcoming.flatMap((e, i) => {
     const s = boards[i]?.data
