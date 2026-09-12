@@ -170,6 +170,7 @@ function ChildRow({
   onToggleExpand,
   onEdit,
   onToggleActive,
+  pending,
 }: {
   child: Child
   expanded: boolean

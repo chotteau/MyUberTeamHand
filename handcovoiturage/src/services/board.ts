@@ -333,7 +333,7 @@ export async function purgeChildFromUpcomingEvents(childId: string): Promise<num
       return dirty ? 1 : 0
     }),
   )
-  return results.reduce((a, b) => a + b, 0)
+  return results.reduce<number>((a, b) => a + b, 0)
 }
 
 /** Retire la voiture d'un parent désactivé des événements à venir. */
@@ -347,5 +347,5 @@ export async function purgeDriverFromUpcomingEvents(uid: string): Promise<number
       return 1
     }),
   )
-  return results.reduce((a, b) => a + b, 0)
+  return results.reduce<number>((a, b) => a + b, 0)
 }
