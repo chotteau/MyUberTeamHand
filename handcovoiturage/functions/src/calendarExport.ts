@@ -79,7 +79,12 @@ function addrText(a: TripAddress | null): string {
   return a.kind === 'custom' || !a.label ? full : `${a.label} — ${full}`
 }
 
-/** Bloc texte d'une direction : voitures, passagers avec adresse, sans-voiture. */
+/**
+ * Bloc texte d'une direction :
+ *   Inscrits (N) : prénoms
+ *   🚗 Chauffeur : passagers (adresse)
+ *   ❗ Sans voiture : prénoms (adresse)   |   ✅ Tout le monde a une voiture
+ */
 function directionBlock(
   label: string,
   time: Timestamp,
@@ -89,28 +94,42 @@ function directionBlock(
 ): string[] {
   const key = direction === 'aller' ? 'passengersAller' : 'passengersRetour'
   const byId = new Map(participants.map((p) => [p.childId, p]))
-  const present = participants.filter((p) => p[direction])
+  const present = participants
+    .filter((p) => p[direction])
+    .sort((a, b) => a.childName.localeCompare(b.childName))
+  const withAddr = (p: Participant) => {
+    const a = addrText(p[direction])
+    return a ? `${p.childName} (${a})` : p.childName
+  }
+
   const lines = [`${label} — départ ${fmtTime(time)}`]
   if (present.length === 0) {
     lines.push('Personne d’inscrit')
     return lines
   }
+  lines.push(`Inscrits (${present.length}) : ${present.map((p) => p.childName).join(', ')}`)
+
+  const activeCars = cars.filter((c) => c[direction]).sort((a, b) => a.driverName.localeCompare(b.driverName))
   const seated = new Set<string>()
-  for (const car of cars.filter((c) => c[direction]).sort((a, b) => a.driverName.localeCompare(b.driverName))) {
+  for (const car of activeCars) {
     const names = car[key]
       .map((id) => byId.get(id))
       .filter((p): p is Participant => !!p)
       .map((p) => {
         seated.add(p.childId)
-        const a = addrText(p[direction])
-        return a ? `${p.childName} (${a})` : p.childName
+        return withAddr(p)
       })
     lines.push(`🚗 ${car.driverName} : ${names.join(', ') || '—'}`)
   }
-  const without = present.filter((p) => !seated.has(p.childId)).map((p) => p.childName)
-  if (cars.filter((c) => c[direction]).length === 0) lines.push('❗ Aucune voiture')
-  else if (without.length) lines.push(`❗ Sans voiture : ${without.join(', ')}`)
-  else lines.push('✅ Tout le monde a une voiture')
+
+  const without = present.filter((p) => !seated.has(p.childId))
+  if (activeCars.length === 0) {
+    lines.push(`❗ Aucune voiture — à prendre en charge : ${without.map(withAddr).join(', ')}`)
+  } else if (without.length) {
+    lines.push(`❗ Sans voiture : ${without.map(withAddr).join(', ')}`)
+  } else {
+    lines.push('✅ Tout le monde a une voiture')
+  }
   return lines
 }
 
