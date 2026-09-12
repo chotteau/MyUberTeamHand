@@ -264,9 +264,13 @@ URL d'abonnement : `/api/calendar/{calendarToken}.ics` (token = `config.calendar
 ```
 ALLER — départ 17:15
 Inscrits (4) : Emma, Hugo, Léa, Lucas
-🚗 Jean : Lucas, Emma (Chez Maman — 45 av. Gambetta, Paris), Tom (8 av. du Parc, Paris)
-🚗 Sophie : Léa
-❗ Sans voiture : Hugo (Domicile — 3 rue du Moulin, Paris)
+🚗 Jean
+   • Lucas (Chez Papa — 12 rue de la Paix, Paris)
+   • Emma (Chez Maman — 45 av. Gambetta, Paris)
+🚗 Sophie
+   • Léa (Domicile — 3 rue du Moulin, Paris)
+❗ Sans voiture :
+   • Hugo (Domicile — 3 rue du Moulin, Paris)
 
 RETOUR — départ 19:00
 🚗 Jean : Lucas, Emma (Chez Papa — 12 rue de la Paix, Paris)

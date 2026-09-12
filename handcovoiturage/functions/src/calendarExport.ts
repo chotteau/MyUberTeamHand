@@ -119,14 +119,17 @@ function directionBlock(
         seated.add(p.childId)
         return withAddr(p)
       })
-    lines.push(`🚗 ${car.driverName} : ${names.join(', ') || '—'}`)
+    lines.push(`🚗 ${car.driverName || 'Chauffeur'}${names.length ? '' : ' : —'}`)
+    for (const n of names) lines.push(`   • ${n}`)
   }
 
   const without = present.filter((p) => !seated.has(p.childId))
   if (activeCars.length === 0) {
-    lines.push(`❗ Aucune voiture — à prendre en charge : ${without.map(withAddr).join(', ')}`)
+    lines.push('❗ Aucune voiture — à prendre en charge :')
+    for (const p of without) lines.push(`   • ${withAddr(p)}`)
   } else if (without.length) {
-    lines.push(`❗ Sans voiture : ${without.map(withAddr).join(', ')}`)
+    lines.push('❗ Sans voiture :')
+    for (const p of without) lines.push(`   • ${withAddr(p)}`)
   } else {
     lines.push('✅ Tout le monde a une voiture')
   }
