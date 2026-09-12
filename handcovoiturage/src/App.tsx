@@ -36,6 +36,7 @@ export default function App() {
             <Route element={<AdminLayout />}>
               <Route path="/admin" element={<Dashboard />} />
               <Route path="/admin/evenements" element={<AdminEvents />} />
+              <Route path="/admin/event/:id" element={<EventDetail adminMode />} />
               <Route path="/admin/familles" element={<AdminFamilies />} />
               <Route path="/admin/config" element={<AdminConfig />} />
             </Route>

@@ -167,7 +167,7 @@ Collections **supprimées** : `needs`, `offers`, `rides`, `notifications`, `invi
 - **Liaison automatique** : les enfants d'un parent = `children where parentEmails array-contains email`. Aucun token, aucune invitation, aucune action admin.
 - **Création de compte réservée aux emails déclarés** : la Cloud Function publique `isEmailDeclared` est appelée avant `createUserWithEmailAndPassword` ; un email absent de tout `parentEmails` est refusé (« Cet email n'est pas déclaré au club »). Même contrôle à la première connexion Google (déconnexion immédiate). Un compte existant n'est jamais recréé : « Un compte existe déjà — Mot de passe oublié ».
 - Un parent sans enfant actif ne voit pas le bloc « Ma voiture ».
-- L'admin peut retirer n'importe quelle voiture depuis l'en-tête de colonne de la matrice.
+- **Deux modes pour l'admin** : sur `/event/:id` (onglet Planning) il agit comme un parent, sans pouvoir destructif ; sur `/admin/event/:id` (depuis le Dashboard ou la liste admin) il voit le badge « Mode admin », un bouton **Modifier** l'événement et un ✕ pour retirer n'importe quelle voiture.
 - Le rôle `admin` est posé manuellement (script `setAdmin` ou console).
 
 ### 2.2 Import CSV (admin)
@@ -298,13 +298,14 @@ Page accessible à tous — **vue saison uniquement**.
 ### 3.2 Parent
 - `/` → `/planning`
 - `/planning` — 4 semaines glissantes (bouton « Voir toute la saison »). Par événement : date/heure/lieu, badge statut, et **résumé** : « Lucas : aller ✔ retour ✔ » / « À déclarer », « 3 voitures · 1 enfant sans voiture ».
-- `/event/:id` — en-tête + « Mes enfants » (2.4) + « Ma voiture » (2.5) + matrice (2.6)
+- `/event/:id` — en-tête + « Mes enfants » (2.4) + « Ma voiture » (2.5) + matrice (2.6). L'admin y est un parent comme les autres.
 - `/stats`
 - `/mon-profil` — prénom ; adresses par défaut / secondaire de mes enfants
 
 ### 3.3 Admin (en plus)
 - `/admin` — événements de la semaine, alertes (enfants sans voiture, événements sans voiture), dernière sync ICS
-- `/admin/evenements` — liste 4 semaines / saison, passés grisés, sync ICS, créer / modifier / annuler / `vacances` / réactiver. Suppression réservée aux `manual`.
+- `/admin/evenements` — liste 4 semaines / saison, passés grisés, sync ICS, créer / modifier / annuler / `vacances` / réactiver. Suppression réservée aux `manual`. Titre → `/admin/event/:id`.
+- `/admin/event/:id` — même page que `/event/:id` en **mode admin** : Modifier l'événement, retirer une voiture (✕).
 - `/admin/familles` — liste, import CSV, fiche enfant (prénom, parents, adresses, actif) ; section **Comptes connectés** : activer / désactiver un parent (compte désactivé = écran bloquant + règles Firestore refusent ses écritures)
 - `/admin/config` — saison, 2 jours d'entraînement, URL ICS, nom + token du calendrier (bouton « Regénérer le lien »), seuil orange, bouton « Générer / Regénérer le calendrier »
 

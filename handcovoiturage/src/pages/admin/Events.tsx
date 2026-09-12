@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { Calendar, Plus, RefreshCw, Pencil, Ban, Sun, RotateCcw, Trash2 } from 'lucide-react'
@@ -142,7 +143,9 @@ function EventRow({
             {event.source === 'ics_ffhb' && <span className="badge bg-slate-100 text-slate-500">FFHB</span>}
             {event.source === 'generated' && <span className="badge bg-slate-100 text-slate-500">Auto</span>}
           </div>
-          <div className="truncate font-medium text-secondary">{event.title}</div>
+          <Link to={`/admin/event/${event.id}`} className="block truncate font-medium text-secondary hover:text-primary hover:underline">
+            {event.title}
+          </Link>
           <EventSummary event={event} />
         </div>
         {!frozen && (

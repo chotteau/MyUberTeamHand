@@ -54,7 +54,7 @@ export default function Dashboard() {
             <section className="card space-y-2">
               <h2 className="text-sm font-semibold text-slate-600">À surveiller</h2>
               {alerts.map((a) => (
-                <Link key={a.event.id} to={`/event/${a.event.id}`} className="flex items-center gap-2 rounded-lg bg-amber-50 p-2 text-sm text-amber-800 hover:bg-amber-100">
+                <Link key={a.event.id} to={`/admin/event/${a.event.id}`} className="flex items-center gap-2 rounded-lg bg-amber-50 p-2 text-sm text-amber-800 hover:bg-amber-100">
                   <AlertTriangle className="h-4 w-4 shrink-0" />
                   <span className="capitalize">{formatDayMonth(a.event.date)}</span> — {a.event.title} : {a.text}
                 </Link>

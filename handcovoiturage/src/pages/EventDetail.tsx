@@ -1,5 +1,7 @@
+import { useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { ArrowLeft, Lock } from 'lucide-react'
+import { ArrowLeft, Lock, Pencil, ShieldCheck } from 'lucide-react'
+import { EventFormModal } from '../components/admin/EventFormModal'
 import { useEvent } from '../hooks/useEvents'
 import { useMyChildren } from '../hooks/useChildren'
 import { useEventBoard } from '../hooks/useEventBoard'
@@ -13,9 +15,14 @@ import { EventStatusBadge, EventTypeBadge } from '../components/ui/StatusBadge'
 import { PageSpinner } from '../components/ui/Spinner'
 import { isEventEditable, isEventPast } from '../utils/dates'
 
-export default function EventDetail() {
+/**
+ * adminMode (route /admin/event/:id) : pouvoirs admin visibles (retirer une
+ * voiture, modifier l'événement). Sur /event/:id l'admin agit comme un parent.
+ */
+export default function EventDetail({ adminMode = false }: { adminMode?: boolean }) {
   const { id } = useParams()
   const { profile, isAdmin } = useAuth()
+  const [editOpen, setEditOpen] = useState(false)
   const { data: event, isLoading } = useEvent(id)
   const { data: myChildren } = useMyChildren()
   const { data: config } = useConfig()
@@ -35,6 +42,7 @@ export default function EventDetail() {
     )
   }
 
+  const admin = adminMode && isAdmin
   const editable = isEventEditable(event)
   const past = isEventPast(event)
   const hasReturn = !!event.returnTime
@@ -44,13 +52,29 @@ export default function EventDetail() {
 
   return (
     <div className="space-y-4">
-      <Link
-        to="/planning"
-        className="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-primary"
-      >
-        <ArrowLeft className="h-4 w-4" />
-        Planning
-      </Link>
+      <div className="flex items-center justify-between gap-2">
+        <Link
+          to={admin ? '/admin/evenements' : '/planning'}
+          className="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-primary"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          {admin ? 'Événements (admin)' : 'Planning'}
+        </Link>
+        {admin && (
+          <div className="flex items-center gap-2">
+            <span className="badge inline-flex items-center gap-1 bg-secondary text-white">
+              <ShieldCheck className="h-3 w-3" />
+              Mode admin
+            </span>
+            {!past && (
+              <button onClick={() => setEditOpen(true)} className="btn-secondary !py-1.5 text-xs">
+                <Pencil className="h-3 w-3" />
+                Modifier
+              </button>
+            )}
+          </div>
+        )}
+      </div>
 
       <header className={`card space-y-2 ${past ? 'opacity-70' : ''}`}>
         <div className="flex flex-wrap items-center gap-2">
@@ -120,10 +144,12 @@ export default function EventDetail() {
             cars={cars}
             editable={editable}
             threshold={config?.carWarningThreshold ?? 5}
-            canRemoveCar={isAdmin}
+            canRemoveCar={admin}
           />
         </>
       )}
+
+      {editOpen && <EventFormModal event={event} onClose={() => setEditOpen(false)} />}
     </div>
   )
 }
