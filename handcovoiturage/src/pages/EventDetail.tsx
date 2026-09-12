@@ -113,7 +113,7 @@ export default function EventDetail({ adminMode = false }: { adminMode?: boolean
           </h2>
           <p className="mt-1 text-sm text-slate-500">
             {event.status === 'vacances'
-              ? "Pas d'entraînement cette semaine — rien à organiser."
+              ? "Pas d'entraînement ce jour-là — rien à organiser."
               : 'Cet événement est annulé — rien à organiser.'}
           </p>
         </section>
