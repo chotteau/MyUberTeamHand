@@ -35,4 +35,4 @@ npm run seed                       # admin@hand.fr / password123, parents jean@,
 prenom_enfant;prenom_parent1;email_parent1;adresse1_rue;adresse1_cp;adresse1_ville;label_adresse1;prenom_parent2;email_parent2;adresse2_rue;adresse2_cp;adresse2_ville;label_adresse2
 ```
 
-Pas de nom de famille, pas de téléphone. `adresse2` = adresse secondaire (parents séparés), vide sinon.
+Pas de nom de famille, pas de téléphone. `adresse2` = 2e adresse optionnelle, vide sinon.

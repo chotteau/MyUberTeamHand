@@ -26,7 +26,7 @@ function AddressFields({
       <legend className="px-1 text-xs font-semibold uppercase text-slate-400">{title}</legend>
       {optional && !value ? (
         <button type="button" className="btn-ghost text-xs text-primary" onClick={() => onChange(EMPTY_ADDR)}>
-          + Ajouter une adresse secondaire (parents séparés)
+          + Ajouter une 2e adresse (optionnel)
         </button>
       ) : (
         <div className="grid gap-2 sm:grid-cols-2">

@@ -53,7 +53,7 @@ Permet aux parents de coordonner les trajets (entraînements + matchs) de maniè
   parentEmails: string[],         // dérivé de parents[].email — utilisé par les règles et les requêtes
   addresses: {
     default: Address,             // adresse principale (obligatoire)
-    secondary?: Address           // 2e adresse (parents séparés) — optionnelle
+    secondary?: Address           // 2e adresse — optionnelle
   },
   active: boolean,
   createdAt: Timestamp,
