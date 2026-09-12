@@ -73,10 +73,10 @@ const fmtDateTime = (ts: Timestamp) =>
     minute: '2-digit',
   }).format(ts.toDate())
 
+/** Adresse seule, sans libellé (« 2 rue X, 92140 Clamart »). */
 function addrText(a: TripAddress | null): string {
   if (!a) return ''
-  const full = [a.street, [a.zipCode, a.city].filter(Boolean).join(' ')].filter(Boolean).join(', ')
-  return a.kind === 'custom' || !a.label ? full : `${a.label} — ${full}`
+  return [a.street, [a.zipCode, a.city].filter(Boolean).join(' ')].filter(Boolean).join(', ')
 }
 
 /**
