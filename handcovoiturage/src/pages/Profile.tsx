@@ -1,11 +1,11 @@
 import { useState } from 'react'
 import { useMutation } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
-import { User as UserIcon, Mail, Baby, LogOut, CalendarPlus, Shield, Pencil } from 'lucide-react'
+import { User as UserIcon, Mail, Baby, CalendarPlus, Shield, Pencil } from 'lucide-react'
 import { useAuth } from '../hooks/useAuth'
 import { useMyChildren } from '../hooks/useChildren'
 import { useConfig } from '../hooks/useConfig'
-import { updateDisplayName, signOut } from '../services/auth'
+import { updateDisplayName } from '../services/auth'
 import { formatAddress } from '../utils/address'
 import { Spinner, PageSpinner } from '../components/ui/Spinner'
 import { ChildAddressesModal } from '../components/admin/ChildFormModal'
@@ -151,14 +151,6 @@ function ProfileContent({ profile }: { profile: User }) {
           </>
         )}
       </section>
-
-      <button
-        onClick={() => signOut()}
-        className="btn mb-6 w-full border border-red-200 bg-white text-danger hover:bg-red-50"
-      >
-        <LogOut className="h-4 w-4" />
-        Se déconnecter
-      </button>
 
       {editing && <ChildAddressesModal child={editing} onClose={() => setEditing(null)} />}
     </div>
