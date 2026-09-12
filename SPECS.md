@@ -219,8 +219,8 @@ Sur la page événement, bloc **« Mes enfants »** — un sous-bloc par enfant 
 ### 2.5 Déclaration d'une voiture (chauffeur)
 
 Bloc **« Ma voiture »** : deux interrupteurs **« J'emmène »** / **« Je ramène »**.
-- Activer une direction crée/maj `cars/{uid}` avec l'enfant du chauffeur déjà dans la liste de passagers correspondante.
-- Désactiver une direction (ou les deux → suppression de la voiture) : ses passagers redeviennent « sans voiture » pour cette direction.
+- Activer une direction crée/maj `cars/{uid}` avec l'enfant du chauffeur déjà dans la liste de passagers correspondante, **et le retire de toute autre voiture** pour cette direction (règles 1 et 3).
+- Désactiver une direction (ou les deux → suppression de la voiture) : ses passagers redeviennent « sans voiture » pour cette direction. Pas de retour automatique dans une voiture précédente : le bandeau d'alerte signale les enfants à re-placer.
 - Aucune capacité demandée.
 - Seul le chauffeur (ou l'admin) crée/supprime sa voiture. Une seule voiture par chauffeur par événement.
 
@@ -241,7 +241,7 @@ Total             │    2    │     1     │     │    1    │    2     │
 ```
 
 - Une ligne par enfant inscrit (aller ou retour) ; les enfants des chauffeurs apparaissent toujours.
-- Une colonne par voiture et par direction + une colonne « — » (sans voiture).
+- Une colonne par voiture et par direction + une colonne « Sans voiture ».
 - Cellule = bouton radio : cliquer met l'enfant dans cette voiture pour cette direction (et le retire de l'autre). Cliquer « — » le sort de toute voiture.
 - Cellule grisée « ─ » si l'enfant n'est pas inscrit pour cette direction.
 - Ligne **Total** : nombre d'enfants par voiture, **orange si ≥ `carWarningThreshold`** (5).

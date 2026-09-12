@@ -8,6 +8,7 @@ interface Props {
   eventId: string
   driver: DriverInfo
   myCar: Car | undefined
+  cars: Car[]
   participants: Participant[]
   hasReturn: boolean
   editable: boolean
@@ -18,13 +19,14 @@ export function MyCarBlock({
   eventId,
   driver,
   myCar,
+  cars,
   participants,
   hasReturn,
   editable,
 }: Props) {
   const save = useMutation({
     mutationFn: ({ aller, retour }: { aller: boolean; retour: boolean }) =>
-      setMyCar(eventId, driver, aller, retour, myCar, participants),
+      setMyCar(eventId, driver, aller, retour, myCar, participants, cars),
     onError: () => toast.error("Impossible d'enregistrer la voiture"),
   })
 

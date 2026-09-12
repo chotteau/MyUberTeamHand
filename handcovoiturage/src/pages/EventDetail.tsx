@@ -131,6 +131,7 @@ export default function EventDetail({ adminMode = false }: { adminMode?: boolean
                   children: activeChildren,
                 }}
                 myCar={myCar}
+                cars={cars}
                 participants={participants}
                 hasReturn={hasReturn}
                 editable={editable}

@@ -163,6 +163,7 @@ export async function setMyCar(
   retour: boolean,
   existing: Car | undefined,
   participants: Participant[],
+  otherCars: Car[] = [],
 ): Promise<void> {
   const carRef = doc(carsCol(eventId), driver.uid)
   if (!aller && !retour) {
@@ -184,6 +185,20 @@ export async function setMyCar(
     passengersRetour: retour ? union(existing?.passengersRetour ?? []) : [],
     updatedAt: serverTimestamp(),
   })
+
+  // Règle 1 + règle 3 : l'enfant du chauffeur est dans SA voiture, donc dans
+  // aucune autre pour chaque direction activée.
+  for (const d of ['aller', 'retour'] as Direction[]) {
+    if (!(d === 'aller' ? aller : retour)) continue
+    const key = passengersKey(d)
+    for (const car of otherCars) {
+      if (car.id === driver.uid) continue
+      const next = car[key].filter((id) => !childIds.includes(id))
+      if (next.length !== car[key].length) {
+        batch.update(doc(carsCol(eventId), car.id), { [key]: next, updatedAt: serverTimestamp() })
+      }
+    }
+  }
 
   for (const child of driver.children) {
     const cur = participants.find((p) => p.childId === child.id)

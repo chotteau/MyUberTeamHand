@@ -299,7 +299,9 @@ function CarHeaders({
         </th>
       ))}
       <th className="border-l border-slate-100 p-2 text-center font-medium text-slate-400">
-        —
+        Sans
+        <br />
+        voiture
       </th>
     </>
   )
