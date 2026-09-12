@@ -69,7 +69,7 @@ export function Layout() {
       </header>
 
       {/* Contenu */}
-      <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-4 pb-24 md:px-6 md:py-6 md:pb-6">
+      <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-4 pb-28 md:px-6 md:py-6 md:pb-6">
         <ErrorBoundary resetKey={location.pathname}>
           <Outlet />
         </ErrorBoundary>

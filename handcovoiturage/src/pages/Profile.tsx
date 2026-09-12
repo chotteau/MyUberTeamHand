@@ -147,7 +147,10 @@ export default function Profile() {
         )}
       </section>
 
-      <button onClick={() => signOut()} className="btn-ghost w-full text-danger">
+      <button
+        onClick={() => signOut()}
+        className="btn mb-6 w-full border border-red-200 bg-white text-danger hover:bg-red-50"
+      >
         <LogOut className="h-4 w-4" />
         Se déconnecter
       </button>
