@@ -165,7 +165,9 @@ Collections **supprimées** : `needs`, `offers`, `rides`, `notifications`, `invi
   - `email` = email du compte en minuscules
   - `displayName` = si absent, le `parents[].firstName` trouvé dans `children` pour cet email, sinon le prénom Google, sinon demandé à l'écran.
 - **Liaison automatique** : les enfants d'un parent = `children where parentEmails array-contains email`. Aucun token, aucune invitation, aucune action admin.
-- Un compte dont l'email ne correspond à aucun enfant voit l'écran « Aucun enfant associé à *email* — contactez l'admin » (il peut consulter le planning en lecture seule).
+- **Création de compte réservée aux emails déclarés** : la Cloud Function publique `isEmailDeclared` est appelée avant `createUserWithEmailAndPassword` ; un email absent de tout `parentEmails` est refusé (« Cet email n'est pas déclaré au club »). Même contrôle à la première connexion Google (déconnexion immédiate). Un compte existant n'est jamais recréé : « Un compte existe déjà — Mot de passe oublié ».
+- Un parent sans enfant actif ne voit pas le bloc « Ma voiture ».
+- L'admin peut retirer n'importe quelle voiture depuis l'en-tête de colonne de la matrice.
 - Le rôle `admin` est posé manuellement (script `setAdmin` ou console).
 
 ### 2.2 Import CSV (admin)

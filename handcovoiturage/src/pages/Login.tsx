@@ -11,7 +11,8 @@ const AUTH_ERRORS: Record<string, string> = {
   'auth/invalid-credential': 'Email ou mot de passe incorrect',
   'auth/user-not-found': 'Aucun compte avec cet email — créez-en un',
   'auth/wrong-password': 'Email ou mot de passe incorrect',
-  'auth/email-already-in-use': 'Un compte existe déjà avec cet email — connectez-vous',
+  'auth/email-already-in-use': 'Un compte existe déjà avec cet email — connectez-vous, ou « Mot de passe oublié »',
+  'app/not-declared': "Cet email n'est pas déclaré au club — contactez l'administrateur",
   'auth/weak-password': 'Mot de passe trop court (6 caractères minimum)',
   'auth/invalid-email': 'Email invalide',
   'auth/too-many-requests': 'Trop de tentatives, réessayez dans quelques minutes',
@@ -97,7 +98,7 @@ export default function Login() {
             />
             {isRegister && (
               <p className="mt-1 text-xs text-slate-400">
-                Utilisez l'email communiqué au club : vos enfants y seront associés automatiquement.
+                Uniquement l'email communiqué au club : c'est lui qui vous relie à votre enfant.
               </p>
             )}
           </div>
@@ -162,13 +163,11 @@ export default function Login() {
           Continuer avec Google
         </button>
 
-        {!isRegister && (
-          <p className="mt-6 text-center text-sm text-slate-500">
-            <Link to="/reset-password" className="text-primary hover:underline">
-              Mot de passe oublié ?
-            </Link>
-          </p>
-        )}
+        <p className="mt-6 text-center text-sm text-slate-500">
+          <Link to="/reset-password" className="text-primary hover:underline">
+            Mot de passe oublié ?
+          </Link>
+        </p>
       </div>
     </div>
   )

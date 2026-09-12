@@ -1,8 +1,8 @@
 import { useMemo } from 'react'
 import { useMutation } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
-import { AlertTriangle, CheckCircle2, Users } from 'lucide-react'
-import { assignChild, passengersKey, takeAll } from '../../services/board'
+import { AlertTriangle, CheckCircle2, Users, X } from 'lucide-react'
+import { assignChild, passengersKey, removeCar, takeAll } from '../../services/board'
 import { tripAddressLabel } from '../../utils/address'
 import { formatTime } from '../../utils/dates'
 import type { Car, Direction, Event, Participant } from '../../types'
@@ -13,6 +13,8 @@ interface Props {
   cars: Car[]
   editable: boolean
   threshold: number
+  /** Admin : peut retirer n'importe quelle voiture. */
+  canRemoveCar?: boolean
 }
 
 const DIR_LABEL: Record<Direction, string> = { aller: 'Aller', retour: 'Retour' }
@@ -22,7 +24,7 @@ const DIR_LABEL: Record<Direction, string> = { aller: 'Aller', retour: 'Retour' 
  * Cellule = bouton radio ; colonne « — » = sans voiture ; ligne Total orange
  * à partir du seuil. Tout parent authentifié peut remplir (règle 6).
  */
-export function CarMatrix({ event, participants, cars, editable, threshold }: Props) {
+export function CarMatrix({ event, participants, cars, editable, threshold, canRemoveCar }: Props) {
   const directions: Direction[] = event.returnTime ? ['aller', 'retour'] : ['aller']
 
   const rows = useMemo(
@@ -51,7 +53,11 @@ export function CarMatrix({ event, participants, cars, editable, threshold }: Pr
       takeAll(event.id, v.direction, v.carId, participants, cars),
     onError: () => toast.error('Échec'),
   })
-  const busy = assign.isPending || grab.isPending
+  const remove = useMutation({
+    mutationFn: (carId: string) => removeCar(event.id, carId),
+    onError: () => toast.error('Échec'),
+  })
+  const busy = assign.isPending || grab.isPending || remove.isPending
 
   /** Voiture d'un enfant pour une direction (au plus une). */
   const carOf = (childId: string, d: Direction) =>
@@ -130,6 +136,10 @@ export function CarMatrix({ event, participants, cars, editable, threshold }: Pr
                   cars={col.cars}
                   canGrab={editable && !busy}
                   onGrab={(carId) => grab.mutate({ direction: col.direction, carId })}
+                  canRemove={!!canRemoveCar && !busy}
+                  onRemove={(carId) => {
+                    if (confirm('Retirer cette voiture (aller et retour) ?')) remove.mutate(carId)
+                  }}
                 />
               ))}
             </tr>
@@ -246,11 +256,15 @@ function CarHeaders({
   cars,
   canGrab,
   onGrab,
+  canRemove,
+  onRemove,
 }: {
   direction: Direction
   cars: Car[]
   canGrab: boolean
   onGrab: (carId: string) => void
+  canRemove: boolean
+  onRemove: (carId: string) => void
 }) {
   return (
     <>
@@ -259,7 +273,20 @@ function CarHeaders({
           key={`${direction}-${car.id}`}
           className="border-l border-slate-100 p-2 text-center font-medium"
         >
-          <div>🚗 {car.driverName}</div>
+          <div className="flex items-center justify-center gap-1">
+            🚗 {car.driverName || 'Chauffeur'}
+            {canRemove && (
+              <button
+                type="button"
+                onClick={() => onRemove(car.id)}
+                className="rounded p-0.5 text-slate-400 hover:bg-red-50 hover:text-danger"
+                aria-label="Retirer cette voiture"
+                title="Retirer cette voiture (admin)"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            )}
+          </div>
           {canGrab && (
             <button
               type="button"

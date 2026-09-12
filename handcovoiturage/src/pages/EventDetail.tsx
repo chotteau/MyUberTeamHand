@@ -15,7 +15,7 @@ import { isEventEditable, isEventPast } from '../utils/dates'
 
 export default function EventDetail() {
   const { id } = useParams()
-  const { profile } = useAuth()
+  const { profile, isAdmin } = useAuth()
   const { data: event, isLoading } = useEvent(id)
   const { data: myChildren } = useMyChildren()
   const { data: config } = useConfig()
@@ -77,7 +77,18 @@ export default function EventDetail() {
         <PageSpinner />
       ) : (
         <>
-          {editable && (
+          {editable && activeChildren.length === 0 && (
+            <MyChildrenBlock
+              eventId={event.id}
+              uid={profile.uid}
+              children={[]}
+              participants={participants}
+              cars={cars}
+              hasReturn={hasReturn}
+              editable={editable}
+            />
+          )}
+          {editable && activeChildren.length > 0 && (
             <div className="grid gap-4 md:grid-cols-2">
               <MyChildrenBlock
                 eventId={event.id}
@@ -109,6 +120,7 @@ export default function EventDetail() {
             cars={cars}
             editable={editable}
             threshold={config?.carWarningThreshold ?? 5}
+            canRemoveCar={isAdmin}
           />
         </>
       )}

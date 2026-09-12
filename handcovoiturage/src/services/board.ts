@@ -203,6 +203,11 @@ export async function setMyCar(
   await batch.commit()
 }
 
+/** Admin : retire une voiture (ses passagers redeviennent « sans voiture »). */
+export async function removeCar(eventId: string, carId: string): Promise<void> {
+  await deleteDoc(doc(carsCol(eventId), carId))
+}
+
 // ---------------------------------------------------------------------------
 // Écriture — remplissage (tout le monde, règle 6)
 // ---------------------------------------------------------------------------

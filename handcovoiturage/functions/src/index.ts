@@ -21,3 +21,18 @@ export const triggerIcsSync = onCall({ region: 'europe-west1' }, async (request)
   await assertAdmin(request.auth?.uid)
   return await runIcsSync()
 })
+
+/**
+ * Callable publique : l'email est-il déclaré comme parent d'un enfant ?
+ * Sert à refuser la création de compte d'un email inconnu, sans exposer la liste.
+ */
+export const isEmailDeclared = onCall({ region: 'europe-west1' }, async (request) => {
+  const email = String((request.data as { email?: string })?.email ?? '').trim().toLowerCase()
+  if (!email) return { declared: false }
+  const snap = await db
+    .collection('children')
+    .where('parentEmails', 'array-contains', email)
+    .limit(1)
+    .get()
+  return { declared: !snap.empty }
+})

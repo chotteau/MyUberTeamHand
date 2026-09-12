@@ -1,7 +1,8 @@
 import { createContext, useEffect, useState, type ReactNode } from 'react'
 import { onAuthStateChanged, type User as FbUser } from 'firebase/auth'
 import { auth } from '../services/firebase'
-import { ensureUserDoc, getUserProfile } from '../services/auth'
+import toast from 'react-hot-toast'
+import { ensureUserDoc, getUserProfile, signOut } from '../services/auth'
 import type { User } from '../types'
 
 export interface AuthContextValue {
@@ -28,6 +29,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         try {
           setProfile(await ensureUserDoc(fbUser))
         } catch (e) {
+          if ((e as { code?: string })?.code === 'app/not-declared') {
+            toast.error("Cet email n'est pas déclaré au club. Contactez l'administrateur.", { duration: 8000 })
+            await signOut()
+            return
+          }
           console.error('Profil utilisateur inaccessible', e)
           setProfile(null)
         }
