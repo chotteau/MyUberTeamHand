@@ -219,7 +219,7 @@ Sur la page événement, bloc **« Mes enfants »** — **une ligne compacte par
 - Cocher une direction inscrit l'enfant avec son adresse par défaut et **déplie** la ligne pour choisir l'adresse (défaut / secondaire / autre). Choisir une adresse **replie** la ligne. Le chevron ⌄ permet de rouvrir.
 - « Autre… » ouvre 3 champs (rue, CP, ville) — enregistrés **uniquement** dans le participant (`kind: 'custom'`), jamais sur la fiche enfant.
 - Sous les adresses, un **commentaire** par enfant (`participants.note`, 200 caractères, global — pas lié à une direction, enregistré à la sortie du champ) : repris en fin d'invitation ICS « 📝 Note pour Achille : … ». Une icône 💬 sur la ligne compacte signale qu'il y en a un.
-- Sauvegarde immédiate à chaque changement (pas de bouton Valider) → `participants/{childId}`.
+- Sauvegarde immédiate à chaque changement (pas de bouton Valider) → `participants/{childId}`. Changer l'adresse ou le commentaire ne replace pas un enfant mis « sans voiture » à la main.
 - **Placement automatique** : une direction nouvellement cochée place l'enfant dans la **première voiture active (ordre de déclaration) ayant encore une place (`passengers < seats`)** ; si toutes sont pleines → « sans voiture » + alerte « plus de place : ajouter un véhicule ? ».
 - Décocher une direction retire automatiquement l'enfant de la voiture où il était pour cette direction.
 - Seuls les parents de l'enfant (ou l'admin) peuvent inscrire / désinscrire.
@@ -227,7 +227,7 @@ Sur la page événement, bloc **« Mes enfants »** — **une ligne compacte par
 ### 2.5 Déclaration d'une voiture (chauffeur)
 
 Bloc **« Ma voiture »** : deux interrupteurs **« J'emmène »** / **« Je ramène »** + sélecteur **Places** (défaut `config.defaultSeats` = 4, choix 2–6 ; places pour les enfants, hors chauffeur — l'enfant du chauffeur en occupe une).
-- Activer une direction crée/maj `cars/{uid}` (avec `createdAt` = ordre de déclaration, `seats`). Les enfants **déjà inscrits sans voiture** y montent automatiquement, par ordre d'inscription, tant qu'il reste des places. L'enfant du chauffeur est inscrit (adresse par défaut) et placé dans sa voiture — **sauf** s'il est déjà placé dans une autre voiture : l'app demande alors, par direction, s'il y reste ou s'il monte avec son parent. L'enfant n'est **pas verrouillé** dans la voiture de son parent.
+- Activer une direction crée/maj `cars/{uid}` (avec `createdAt` = ordre de déclaration, `seats`). Les enfants **déjà inscrits sans voiture** y montent automatiquement, par ordre d'inscription, tant qu'il reste des places. L'enfant du chauffeur est inscrit (adresse par défaut) et placé dans sa voiture — **sauf** s'il est déjà placé dans une autre voiture : l'app demande alors, par direction, s'il y reste ou s'il monte avec son parent ; s'il n'est placé nulle part mais qu'une autre voiture a de la place, l'app demande s'il monte avec son parent ou dans l'autre voiture. Ces inscriptions / placements n'ont lieu qu'à l'**activation** d'une direction : régler ensuite les places, le lieu de RDV ou la note ne réinscrit ni ne déplace personne (sauf augmentation des places → embarque les enfants en attente). L'enfant n'est **pas verrouillé** dans la voiture de son parent.
 - Désactiver une direction (ou les deux → suppression de la voiture) : ses passagers sont **rebasculés automatiquement** dans les autres voitures actives ayant de la place (ordre de déclaration), le reste passe « sans voiture » (alerte).
 - Changer les places : augmenter embarque les enfants en attente ; diminuer ne déplace personne (le total passe au rouge si dépassé).
 - Une fois déclaré, le chauffeur peut fixer un **lieu de rendez-vous** par direction (`meetAller` / `meetRetour`) : « chez chaque enfant » (défaut), une de ses adresses (celles de ses enfants : défaut / secondaire) ou une autre adresse saisie ; et un **commentaire** (`note`, 200 caractères, enregistré à la sortie du champ). Les deux vont dans le calendrier (2.7).
@@ -256,7 +256,7 @@ Total             │    2    │     1     │     │    1    │    2     │
 - Cellule grisée « ─ » si l'enfant n'est pas inscrit pour cette direction.
 - Ligne **Total** : « n/places » par voiture — **vert** si plein (n = places), **rouge** si n > places (alerte « Voiture de X : 5 enfants pour 4 places »). Cliquer une voiture pleine demande confirmation avant de forcer le +1. Un 📍 dans l'en-tête signale un lieu de rendez-vous imposé (adresse au survol).
 - Bandeau d'alertes au-dessus : « ❗ 2 enfants sans voiture à l'aller », « ❗ Aucune voiture au retour ».
-- L'adresse du jour de chaque enfant est affichée sous son prénom (label, ex. « Chez Maman », ou l'adresse custom).
+- L'adresse du jour de chaque enfant (label, ex. « Chez Maman », ou l'adresse custom) et son commentaire sont visibles au survol / appui long du prénom (le tableau reste compact sur mobile ; l'adresse complète est dans le calendrier).
 - **Tout parent authentifié** peut remplir / déplacer **n'importe quel** enfant. Un chauffeur peut ainsi « prendre » les enfants sans voiture ; une nouvelle voiture peut reprendre tous les enfants d'une autre (action « Tout prendre » sur l'en-tête de colonne).
 - Temps réel (`onSnapshot` sur `participants` et `cars`).
 - Mobile : première colonne figée, défilement horizontal du tableau.
@@ -390,8 +390,14 @@ service cloud.firestore {
     function isParentOf(childId) {
       return email() in get(/databases/$(database)/documents/children/$(childId)).data.parentEmails;
     }
+    // Compte non désactivé par l'admin (champ absent = actif) — requis pour toute écriture parent.
+    function isActive() {
+      let u = get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+      return !('active' in u) || u.active == true;
+    }
     function eventEditable(eventId) {
-      return get(/databases/$(database)/documents/events/$(eventId)).data.departureTime > request.time;
+      let ev = get(/databases/$(database)/documents/events/$(eventId)).data;
+      return ev.status == 'scheduled' && ev.departureTime > request.time;
     }
     function onlyKeys(keys) {
       return request.resource.data.diff(resource.data).affectedKeys().hasOnly(keys);
@@ -400,16 +406,18 @@ service cloud.firestore {
     match /users/{uid} {
       allow read: if isAuth() && (request.auth.uid == uid || isAdmin());
       allow create: if isAuth() && request.auth.uid == uid
-                    && request.resource.data.role == 'parent';
-      allow update: if isAuth() && request.auth.uid == uid && onlyKeys(['displayName', 'updatedAt'])
-                    || isAdmin();
+                    && request.resource.data.role == 'parent'
+                    && request.resource.data.active == true;
+      allow update: if isAdmin()
+                    || (isAuth() && isActive() && request.auth.uid == uid
+                        && onlyKeys(['displayName', 'updatedAt']));
     }
 
     match /children/{childId} {
       allow read: if isAuth();
       allow create, delete: if isAdmin();
       allow update: if isAdmin()
-                    || (isAuth() && email() in resource.data.parentEmails
+                    || (isAuth() && isActive() && email() in resource.data.parentEmails
                         && onlyKeys(['addresses', 'updatedAt']));
     }
 

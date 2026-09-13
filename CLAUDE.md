@@ -83,7 +83,7 @@ handcovoiturage/
 │   ├── index.ts
 │   ├── syncIcs.ts            # scheduled 24h + callable admin
 │   ├── calendarExport.ts     # HTTP GET /api/calendar/{token}.ics
-│   └── lib/                  # admin.ts, icsParser.ts, data.ts
+│   └── lib/                  # admin.ts, icsParser.ts
 ├── firestore.rules
 ├── firestore.indexes.json    # vide
 ├── firebase.json
@@ -117,16 +117,16 @@ handcovoiturage/
 1. Lire config/app.icsUrl, fetch, parser (ical.js, TZ Europe/Paris)
 2. Si 0 VEVENT → stop (ne rien annuler)
 3. Pour chaque VEVENT : upsert events/{icsUid} SANS toucher `status` si le doc existe
-4. Events ics_ffhb FUTURS absents du flux → status 'cancelled'
+4. Events ics_ffhb FUTURS absents du flux → status 'cancelled' + `autoCancelled: true` ; s'ils réapparaissent, seuls ceux-là repassent 'scheduled' (jamais une annulation admin)
 5. Écrire config/app.icsLastSync
 ```
 
 ### calendarExport (HTTP GET /api/calendar/{token}.ics)
 ```
 1. Vérifier token == config/app.calendarToken sinon 404
-2. Charger events de (now − 7 j) à seasonEnd + leurs participants et cars
+2. Charger les events non terminés (date ≥ now − 24 h, fin ≥ now) jusqu'à seasonEnd + leurs participants et cars (en parallèle)
 3. 1 VEVENT par événement ; DESCRIPTION = voitures aller / retour (une puce par enfant, adresse sans libellé — ou « RDV : adresse » du chauffeur et prénoms seuls si `meetAller/meetRetour` ; voitures vides omises) ; puis « 📝 Note de X : … » par chauffeur ayant une `note` et « 📝 Note pour Enfant : … » par participant ayant une `note` ; annulés → STATUS:CANCELLED
-4. Content-Type text/calendar ; Cache-Control max-age=300
+4. Content-Type text/calendar ; Cache-Control max-age=60 (aussi posé par Hosting sur `/api/calendar/**`) ; DTSTAMP / LAST-MODIFIED / « Mis à jour le » = dernière modification réelle (event, participants, cars), pas l'heure de la requête
 ```
 
 Le rewrite Hosting doit préciser la région : `"function": { "functionId": "calendarExport", "region": "europe-west1" }`.

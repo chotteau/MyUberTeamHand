@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { Calendar, ChevronRight } from 'lucide-react'
 import { useEvents, useEventSummary, type EventsRange } from '../hooks/useEvents'
 import { useMyChildren } from '../hooks/useChildren'
+import { carOf } from '../services/board'
 import { EventSummary } from '../components/events/EventSummary'
 import { EventStatusBadge, EventTypeBadge } from '../components/ui/StatusBadge'
 import { PageSpinner } from '../components/ui/Spinner'
@@ -91,7 +92,10 @@ function EventStatusLine({ event, myChildren }: { event: Event; myChildren: Chil
   })
 
   const cars = Math.max(data.aller.cars, data.retour.cars)
-  const without = data.aller.withoutCar + data.retour.withoutCar
+  // Enfants distincts sans voiture (un enfant sans voiture aller ET retour compte 1).
+  const without = data.board.participants.filter(
+    (p) => (p.aller && !carOf(data.board.cars, p.childId, 'aller')) || (p.retour && !carOf(data.board.cars, p.childId, 'retour')),
+  ).length
   const tone = without > 0 || (cars === 0 && data.aller.present + data.retour.present > 0)
     ? 'text-amber-700'
     : 'text-slate-500'

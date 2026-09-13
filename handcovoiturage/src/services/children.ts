@@ -62,12 +62,6 @@ export async function listMyChildren(email: string): Promise<Child[]> {
   return snap.docs.map(toChild).sort((a, b) => a.firstName.localeCompare(b.firstName))
 }
 
-/** Recherche par prénom exact (déduplication import CSV). */
-export async function findChildByFirstName(firstName: string): Promise<Child | null> {
-  const snap = await getDocs(query(childrenCol(), where('firstName', '==', firstName)))
-  return snap.empty ? null : toChild(snap.docs[0])
-}
-
 export interface ChildInput {
   firstName: string
   parents: ChildParent[]
@@ -98,9 +92,19 @@ export async function createChild(input: ChildInput): Promise<string> {
   return ref.id
 }
 
-export async function updateChild(id: string, input: ChildInput): Promise<void> {
+/**
+ * Met à jour une fiche. `keepActive` : ne touche pas au statut actif/inactif
+ * (ré-import CSV — un enfant désactivé par l'admin ne doit pas être réactivé).
+ */
+export async function updateChild(
+  id: string,
+  input: ChildInput,
+  opts: { keepActive?: boolean } = {},
+): Promise<void> {
+  const { active, ...rest } = withDerived(input)
   await updateDoc(doc(db, 'children', id), {
-    ...withDerived(input),
+    ...rest,
+    ...(opts.keepActive ? {} : { active }),
     updatedAt: serverTimestamp(),
   })
 }

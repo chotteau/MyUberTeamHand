@@ -144,4 +144,5 @@ export interface AppConfig {
   calendarToken: string
   /** Places proposées par défaut à un chauffeur qui se déclare (hors chauffeur). */
   defaultSeats: number
+  updatedAt?: Timestamp
 }

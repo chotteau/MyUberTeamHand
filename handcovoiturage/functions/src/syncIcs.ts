@@ -39,8 +39,10 @@ export interface SyncResult {
 /**
  * Réconcilie le flux FFHB avec `events` :
  * - nouveau UID → création ;
- * - UID connu → maj titre/heures/lieu SANS toucher `status` ;
- * - match FUTUR absent du flux → 'cancelled' (seulement si le flux n'est pas vide).
+ * - UID connu → maj titre/heures/lieu SANS toucher `status` — sauf si c'est
+ *   la sync elle-même qui l'avait annulé (`autoCancelled`) et qu'il réapparaît :
+ *   il redevient 'scheduled'. Une annulation décidée par l'admin n'est jamais touchée ;
+ * - match FUTUR absent du flux → 'cancelled' + `autoCancelled: true` (seulement si le flux n'est pas vide).
  */
 export async function reconcileIcs(parsed: ParsedIcsEvent[]): Promise<SyncResult> {
   const result: SyncResult = { created: 0, updated: 0, cancelled: 0 }
@@ -82,12 +84,22 @@ export async function reconcileIcs(parsed: ParsedIcsEvent[]): Promise<SyncResult
       continue
     }
     const before = existing.data()
+    const reappeared = before.status === 'cancelled' && before.autoCancelled === true
     const changed =
+      reappeared ||
       before.title !== payload.title ||
       (before.departureTime as Timestamp)?.toMillis?.() !== payload.departureTime.toMillis() ||
-      before.location?.name !== payload.location.name
+      (before.returnTime as Timestamp | undefined)?.toMillis?.() !== payload.returnTime?.toMillis() ||
+      before.location?.name !== payload.location.name ||
+      before.location?.address !== payload.location.address ||
+      before.location?.city !== payload.location.city
     if (changed) {
-      await existing.ref.set(payload, { merge: true })
+      await existing.ref.set(
+        reappeared
+          ? { ...payload, status: 'scheduled', autoCancelled: FieldValue.delete() }
+          : payload,
+        { merge: true },
+      )
       result.updated++
     }
   }
@@ -97,7 +109,10 @@ export async function reconcileIcs(parsed: ParsedIcsEvent[]): Promise<SyncResult
     if (seen.has(uid)) continue
     if (d.get('status') !== 'scheduled') continue
     if ((d.get('departureTime') as Timestamp).toMillis() < now.toMillis()) continue
-    await d.ref.set({ status: 'cancelled', updatedAt: FieldValue.serverTimestamp() }, { merge: true })
+    await d.ref.set(
+      { status: 'cancelled', autoCancelled: true, updatedAt: FieldValue.serverTimestamp() },
+      { merge: true },
+    )
     result.cancelled++
   }
   return result
@@ -118,7 +133,7 @@ export async function runIcsSync(): Promise<SyncResult> {
 }
 
 export const syncIcs = onSchedule(
-  { schedule: 'every day 03:00', timeZone: 'Europe/Paris', region: 'europe-west1' },
+  { schedule: 'every day 03:00', timeZone: 'Europe/Paris', region: 'europe-west1', maxInstances: 1 },
   async () => {
     await runIcsSync()
   },

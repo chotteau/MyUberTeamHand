@@ -1,6 +1,6 @@
 import { getConfig } from './config'
 import { listEvents } from './events'
-import { getBoard } from './board'
+import { getCars } from './board'
 import { isEventPast, toDate } from '../utils/dates'
 import type { Child } from '../types'
 
@@ -32,7 +32,7 @@ export async function getStats(children: Child[]): Promise<StatsResult> {
   const events = (await listEvents(toDate(config.seasonStart), new Date()))
     .filter((e) => e.status === 'scheduled' && isEventPast(e))
 
-  const boards = await Promise.all(events.map((e) => getBoard(e.id)))
+  const carsByEvent = await Promise.all(events.map((e) => getCars(e.id)))
 
   const byDriver = new Map<string, DriverStat>()
   let totalTrips = 0
@@ -41,7 +41,7 @@ export async function getStats(children: Child[]): Promise<StatsResult> {
 
   events.forEach((ev, i) => {
     maxTrips += ev.returnTime ? 2 : 1
-    for (const car of boards[i].cars) {
+    for (const car of carsByEvent[i]) {
       const cur = byDriver.get(car.driverUid) ?? {
         driverUid: car.driverUid,
         driverName: car.driverName,

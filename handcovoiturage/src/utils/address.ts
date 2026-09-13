@@ -7,7 +7,7 @@ export function formatAddress(addr: Address): string {
 }
 
 /** Adresse d'un enfant selon le type choisi (défaut / secondaire). */
-export function childAddress(
+function childAddress(
   child: Child,
   kind: Exclude<TripAddressKind, 'custom'>,
 ): Address | undefined {

@@ -12,7 +12,7 @@ const firebaseConfig = {
   appId: import.meta.env.VITE_FIREBASE_APP_ID,
 }
 
-export const app = initializeApp(firebaseConfig)
+const app = initializeApp(firebaseConfig)
 export const auth = getAuth(app)
 // Les champs optionnels (returnTime, secondary…) sont simplement omis.
 export const db = initializeFirestore(app, { ignoreUndefinedProperties: true })

@@ -8,10 +8,10 @@ import {
   orderBy,
   query,
   serverTimestamp,
-  setDoc,
   Timestamp,
   updateDoc,
   where,
+  writeBatch,
 } from 'firebase/firestore'
 import { addDays, startOfDay } from 'date-fns'
 import { db } from './firebase'
@@ -81,17 +81,25 @@ export async function generateTrainings(config: AppConfig): Promise<GenerationRe
   const start = startOfDay(toDate(config.seasonStart))
   const end = startOfDay(toDate(config.seasonEnd))
 
+  // Une lecture pour les ids existants, puis des écritures groupées (max 500 par batch).
+  const existing = new Set(
+    (await getDocs(query(eventsCol(), where('source', '==', 'generated')))).docs.map((d) => d.id),
+  )
+  let batch = writeBatch(db)
+  let inBatch = 0
+  const commits: Promise<void>[] = []
+
   for (let cursor = start; cursor <= end; cursor = addDays(cursor, 1)) {
     for (let idx = 0; idx < config.trainingDays.length; idx++) {
       const day = config.trainingDays[idx]
       if (day.dayOfWeek !== cursor.getDay()) continue
 
-      const ref = doc(db, 'events', trainingId(cursor, idx))
-      if ((await getDoc(ref)).exists()) {
+      const id = trainingId(cursor, idx)
+      if (existing.has(id)) {
         result.skippedExisting++
         continue
       }
-      await setDoc(ref, {
+      batch.set(doc(db, 'events', id), {
         type: 'training',
         title: `Entraînement ${day.label}`,
         date: Timestamp.fromDate(cursor),
@@ -104,7 +112,14 @@ export async function generateTrainings(config: AppConfig): Promise<GenerationRe
         updatedAt: serverTimestamp(),
       })
       result.created++
+      if (++inBatch === 400) {
+        commits.push(batch.commit())
+        batch = writeBatch(db)
+        inBatch = 0
+      }
     }
   }
+  if (inBatch > 0) commits.push(batch.commit())
+  await Promise.all(commits)
   return result
 }

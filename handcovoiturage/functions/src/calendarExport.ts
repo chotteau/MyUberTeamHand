@@ -19,6 +19,7 @@ interface Participant {
   retour: TripAddress | null
   /** Commentaire du parent, repris en fin de description. */
   note?: string
+  updatedAt?: Timestamp
 }
 interface Car {
   driverName: string
@@ -26,6 +27,9 @@ interface Car {
   retour: boolean
   passengersAller: string[]
   passengersRetour: string[]
+  /** Ordre de déclaration (absent sur les anciennes voitures → en dernier), comme dans l'app. */
+  createdAt?: Timestamp
+  updatedAt?: Timestamp
   /** Lieu de rendez-vous imposé par le chauffeur (sinon chez chaque enfant). */
   meetAller?: TripAddress | null
   meetRetour?: TripAddress | null
@@ -44,7 +48,12 @@ interface EventDoc {
 }
 
 const esc = (t: string) =>
-  t.replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/,/g, '\\,').replace(/\n/g, '\\n')
+  t
+    .replace(/\\/g, '\\\\')
+    .replace(/;/g, '\\;')
+    .replace(/,/g, '\\,')
+    .replace(/\r\n?/g, '\n')
+    .replace(/\n/g, '\\n')
 const toIcsUtc = (d: Date) => d.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '')
 
 /** RFC 5545 : repli des lignes > 75 octets (UTF-8). */
@@ -117,7 +126,11 @@ function directionBlock(
   }
   lines.push(`Inscrits (${present.length}) : ${present.map((p) => p.childName).join(', ')}`)
 
-  const activeCars = cars.filter((c) => c[direction]).sort((a, b) => a.driverName.localeCompare(b.driverName))
+  // Même ordre que les colonnes de l'app : ordre de déclaration.
+  const ms = (c: Car) => c.createdAt?.toMillis() ?? Number.MAX_SAFE_INTEGER
+  const activeCars = cars
+    .filter((c) => c[direction])
+    .sort((a, b) => ms(a) - ms(b) || a.driverName.localeCompare(b.driverName))
   const seated = new Set<string>()
   for (const car of activeCars) {
     const meet = direction === 'aller' ? car.meetAller : car.meetRetour
@@ -153,7 +166,7 @@ function directionBlock(
  * complète dans la description. Prénoms + adresses de prise en charge,
  * jamais d'email. Protégé par le token de config/app.calendarToken.
  */
-export const calendarExport = onRequest({ region: 'europe-west1' }, async (req, res) => {
+export const calendarExport = onRequest({ region: 'europe-west1', maxInstances: 5 }, async (req, res) => {
   try {
     const cfgSnap = await db.doc('config/app').get()
     const token = cfgSnap.get('calendarToken') as string | undefined
@@ -183,31 +196,49 @@ export const calendarExport = onRequest({ region: 'europe-west1' }, async (req, 
     ]
     const now = new Date()
 
-    for (const d of eventsSnap.docs) {
-      const ev = { id: d.id, ...(d.data() as Omit<EventDoc, 'id'>) }
+    // Événements non terminés (un doc sans departureTime valide est ignoré plutôt que de casser tout le flux).
+    const kept = eventsSnap.docs
+      .map((d) => ({ d, ev: { id: d.id, ...(d.data() as Omit<EventDoc, 'id'>) } }))
+      .filter(({ ev }) => typeof ev.departureTime?.toDate === 'function')
+      .map((x) => {
+        const start = x.ev.departureTime.toDate()
+        const end = x.ev.returnTime ? x.ev.returnTime.toDate() : new Date(start.getTime() + 2 * 3600 * 1000)
+        return { ...x, start, end }
+      })
+      .filter(({ end }) => end >= now)
+
+    // Sous-collections chargées en parallèle (et non événement par événement).
+    const boards = await Promise.all(
+      kept.map(({ d }) =>
+        Promise.all([d.ref.collection('participants').get(), d.ref.collection('cars').get()]),
+      ),
+    )
+
+    kept.forEach(({ ev, start, end }, i) => {
       const cancelled = ev.status !== 'scheduled'
       const emoji = ev.type === 'match' ? '🏆' : '🤾'
       const suffix = ev.status === 'vacances' ? ' (vacances)' : ev.status === 'cancelled' ? ' (annulé)' : ''
       const summary = `${cancelled ? '❌ ' : emoji + ' '}${ev.title}${suffix}`
 
-      const start = ev.departureTime.toDate()
-      const end = ev.returnTime ? ev.returnTime.toDate() : new Date(start.getTime() + 2 * 3600 * 1000)
-      if (end < now) continue
+      const participants = boards[i][0].docs.map((x) => x.data() as Participant)
+      const cars = boards[i][1].docs.map((x) => x.data() as Car)
 
-      const [pSnap, cSnap] = await Promise.all([
-        d.ref.collection('participants').get(),
-        d.ref.collection('cars').get(),
-      ])
-      const participants = pSnap.docs.map((x) => x.data() as Participant)
-      const cars = cSnap.docs.map((x) => x.data() as Car)
+      // Dernière modification réelle (événement, inscriptions, voitures) — pas l'heure de la requête,
+      // sinon chaque poll voit un VEVENT « modifié ».
+      const lastModified = new Date(
+        Math.max(
+          ev.updatedAt?.toMillis?.() ?? 0,
+          ...participants.map((p) => p.updatedAt?.toMillis?.() ?? 0),
+          ...cars.map((c) => c.updatedAt?.toMillis?.() ?? 0),
+        ) || now.getTime(),
+      )
 
       const desc: string[] = cancelled
         ? [`Événement ${ev.status === 'vacances' ? 'annulé (vacances scolaires)' : 'annulé'}.`]
         : [
             ...directionBlock('ALLER', ev.departureTime, 'aller', participants, cars),
-            '',
             ...(ev.returnTime
-              ? directionBlock('RETOUR', ev.returnTime, 'retour', participants, cars)
+              ? ['', ...directionBlock('RETOUR', ev.returnTime, 'retour', participants, cars)]
               : []),
           ]
       // Commentaires en fin d'invitation : chauffeurs actifs, puis enfants inscrits.
@@ -224,14 +255,15 @@ export const calendarExport = onRequest({ region: 'europe-west1' }, async (req, 
               .map((p) => `📝 Note pour ${p.childName} : ${p.note!.trim()}`),
           ]
       if (notes.length) desc.push('', ...notes)
-      desc.push('', `Mis à jour le ${fmtDateTime(Timestamp.fromDate(now))} — ${appUrl}/event/${ev.id}`)
+      desc.push('', `Mis à jour le ${fmtDateTime(Timestamp.fromDate(lastModified))} — ${appUrl}/event/${ev.id}`)
 
       const loc = [ev.location?.name, ev.location?.address, ev.location?.city].filter(Boolean).join(', ')
 
       lines.push(
         'BEGIN:VEVENT',
         `UID:event-${ev.id}@handcovoiturage`,
-        `DTSTAMP:${toIcsUtc(now)}`,
+        `DTSTAMP:${toIcsUtc(lastModified)}`,
+        `LAST-MODIFIED:${toIcsUtc(lastModified)}`,
         `DTSTART:${toIcsUtc(start)}`,
         `DTEND:${toIcsUtc(end)}`,
         foldLine(`SUMMARY:${esc(summary)}`),
@@ -240,13 +272,14 @@ export const calendarExport = onRequest({ region: 'europe-west1' }, async (req, 
         `STATUS:${cancelled ? 'CANCELLED' : 'CONFIRMED'}`,
         'END:VEVENT',
       )
-    }
+    })
     lines.push('END:VCALENDAR')
 
     res.set('Content-Type', 'text/calendar; charset=utf-8')
     res.set('Content-Disposition', 'inline; filename="handcovoiturage.ics"')
     res.set('Cache-Control', 'public, max-age=60')
-    res.status(200).send(lines.join('\r\n'))
+    // RFC 5545 : chaque ligne, y compris la dernière, est terminée par CRLF.
+    res.status(200).send(lines.join('\r\n') + '\r\n')
   } catch (e) {
     logger.error('Échec export ICS', e)
     res.status(500).send('Erreur génération calendrier')

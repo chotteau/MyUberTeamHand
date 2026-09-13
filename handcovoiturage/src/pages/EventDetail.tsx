@@ -16,6 +16,7 @@ import { EventSummary } from '../components/events/EventSummary'
 import { EventStatusBadge, EventTypeBadge } from '../components/ui/StatusBadge'
 import { PageSpinner } from '../components/ui/Spinner'
 import { isEventEditable, isEventPast } from '../utils/dates'
+import { DEFAULT_SEATS } from '../services/board'
 
 /**
  * adminMode (route /admin/event/:id) : pouvoirs admin visibles (retirer une
@@ -26,7 +27,7 @@ export default function EventDetail({ adminMode = false }: { adminMode?: boolean
   const { profile, isAdmin } = useAuth()
   const [editOpen, setEditOpen] = useState(false)
   const { data: event, isLoading } = useEvent(id)
-  const { data: myChildren } = useMyChildren()
+  const { data: myChildren, isLoading: loadingChildren } = useMyChildren()
   const { data: config } = useConfig()
   const { participants, cars, loading: loadingBoard, error } = useEventBoard(id)
 
@@ -34,7 +35,7 @@ export default function EventDetail({ adminMode = false }: { adminMode?: boolean
   if (!event || !profile) {
     return (
       <div className="card py-12 text-center text-sm text-slate-400">
-        Événement introuvable.
+        {profile ? 'Événement introuvable.' : 'Profil inaccessible : déconnectez-vous puis reconnectez-vous.'}
         <div className="mt-4">
           <Link to="/planning" className="btn-ghost text-primary">
             Retour au planning
@@ -45,13 +46,12 @@ export default function EventDetail({ adminMode = false }: { adminMode?: boolean
   }
 
   const admin = adminMode && isAdmin
-  const defaultSeats = config?.defaultSeats ?? 4
+  const defaultSeats = config?.defaultSeats ?? DEFAULT_SEATS
   const editable = isEventEditable(event)
   const past = isEventPast(event)
   const hasReturn = !!event.returnTime
   const myCar = cars.find((c) => c.id === profile.uid)
-  // Un enfant désactivé par l'admin ne peut plus être inscrit.
-  const activeChildren = (myChildren ?? []).filter((c) => c.active)
+  const children = myChildren ?? []
 
   return (
     <div className="space-y-4">
@@ -122,46 +122,31 @@ export default function EventDetail({ adminMode = false }: { adminMode?: boolean
               : 'Cet événement est annulé — rien à organiser.'}
           </p>
         </section>
-      ) : loadingBoard ? (
+      ) : loadingBoard || loadingChildren ? (
         <PageSpinner />
       ) : (
         <>
-          {editable && activeChildren.length === 0 && (
-            <MyChildrenBlock
-              eventId={event.id}
-              uid={profile.uid}
-              children={[]}
-              participants={participants}
-              cars={cars}
-              hasReturn={hasReturn}
-              editable={editable}
-            />
-          )}
-          {editable && activeChildren.length > 0 && (
-            <div className="grid gap-4 md:grid-cols-2">
+          {editable && (
+            <div className={`grid gap-4 ${children.length > 0 ? 'md:grid-cols-2' : ''}`}>
               <MyChildrenBlock
                 eventId={event.id}
                 uid={profile.uid}
-                children={activeChildren}
+                myChildren={children}
                 participants={participants}
                 cars={cars}
                 hasReturn={hasReturn}
-                editable={editable}
               />
-              <MyCarBlock
-                eventId={event.id}
-                driver={{
-                  uid: profile.uid,
-                  name: profile.displayName || 'Chauffeur',
-                  children: activeChildren,
-                }}
-                myCar={myCar}
-                cars={cars}
-                participants={participants}
-                hasReturn={hasReturn}
-                editable={editable}
-                defaultSeats={defaultSeats}
-              />
+              {children.length > 0 && (
+                <MyCarBlock
+                  eventId={event.id}
+                  driver={{ uid: profile.uid, name: profile.displayName || 'Chauffeur', children }}
+                  myCar={myCar}
+                  cars={cars}
+                  participants={participants}
+                  hasReturn={hasReturn}
+                  defaultSeats={defaultSeats}
+                />
+              )}
             </div>
           )}
 

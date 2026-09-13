@@ -3,9 +3,9 @@ import { useMutation } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { Car as CarIcon, MapPin } from 'lucide-react'
 import {
-  MAX_SEATS,
-  MIN_SEATS,
+  SEAT_CHOICES,
   carOptionsOf,
+  clampSeats,
   childrenSeatedElsewhere,
   otherActiveCars,
   passengersKey,
@@ -16,9 +16,10 @@ import {
   type KeepElsewhere,
 } from '../../services/board'
 import { formatAddress } from '../../utils/address'
+import { DIR_LABEL, theDirection } from '../../utils/direction'
 import { HelpLink } from '../ui/HelpLink'
 import { NoteField } from './NoteField'
-import type { Address, Car, Direction, Participant, TripAddress } from '../../types'
+import type { Address, Car, Direction, Participant, TripAddress, TripAddressKind } from '../../types'
 
 interface Props {
   eventId: string
@@ -27,15 +28,13 @@ interface Props {
   cars: Car[]
   participants: Participant[]
   hasReturn: boolean
-  editable: boolean
   defaultSeats: number
 }
-
-const SEAT_CHOICES = Array.from({ length: MAX_SEATS - MIN_SEATS + 1 }, (_, i) => MIN_SEATS + i)
 
 /**
  * Bloc « Ma voiture » : J'emmène / Je ramène, places disponibles (hors
  * chauffeur), lieu de rendez-vous imposé par direction et commentaire.
+ * Monté uniquement quand l'événement est modifiable.
  */
 export function MyCarBlock({
   eventId,
@@ -44,13 +43,12 @@ export function MyCarBlock({
   cars,
   participants,
   hasReturn,
-  editable,
   defaultSeats,
 }: Props) {
   const opts = carOptionsOf(myCar, defaultSeats)
-  // Places choisies avant la déclaration (la voiture n'existe pas encore en base).
-  const [draftSeats, setDraftSeats] = useState(opts.seats)
-  const seats = myCar ? opts.seats : draftSeats
+  // Places choisies avant la déclaration (null = suivre la config, qui peut arriver après le 1er rendu).
+  const [draftSeats, setDraftSeats] = useState<number | null>(null)
+  const seats = myCar ? opts.seats : (draftSeats ?? clampSeats(defaultSeats))
 
   const save = useMutation({
     mutationFn: ({ options, keep }: { options: CarOptions; keep?: KeepElsewhere }) =>
@@ -59,7 +57,7 @@ export function MyCarBlock({
   })
 
   const active = opts.aller || opts.retour
-  const disabled = !editable || save.isPending
+  const disabled = save.isPending
   const childIds = driver.children.map((c) => c.id)
   const nameOf = (id: string) => driver.children.find((c) => c.id === id)?.firstName ?? 'votre enfant'
 
@@ -74,7 +72,7 @@ export function MyCarBlock({
     const next = !opts[d]
     const keep: KeepElsewhere = {}
     if (next && childIds.length > 0) {
-      const label = d === 'aller' ? "l'aller" : 'le retour'
+      const label = theDirection(d)
       const kids = childIds.map(nameOf).join(' et ')
       const elsewhere = childrenSeatedElsewhere(cars, driver.uid, childIds, d)
       const withRoom = otherActiveCars(cars, driver.uid, d).filter(
@@ -140,7 +138,7 @@ export function MyCarBlock({
             .filter((d) => opts[d])
             .map((d) => (
               <MeetingPointField
-                key={d}
+                key={`${d}-${JSON.stringify(value(opts, d))}`}
                 direction={d}
                 driver={driver}
                 value={d === 'aller' ? opts.meetAller : opts.meetRetour}
@@ -167,13 +165,18 @@ export function MyCarBlock({
   )
 }
 
+const value = (o: CarOptions, d: Direction) => (d === 'aller' ? o.meetAller : o.meetRetour)
+
+type KnownAddress = Address & { kind: Exclude<TripAddressKind, 'custom'> }
+
 /** Adresses connues du chauffeur : celles de ses enfants (défaut + secondaire), dédoublonnées. */
-function driverAddresses(driver: DriverInfo): Address[] {
+function driverAddresses(driver: DriverInfo): KnownAddress[] {
   const seen = new Set<string>()
-  const out: Address[] = []
+  const out: KnownAddress[] = []
   for (const c of driver.children) {
-    for (const a of [c.addresses.default, c.addresses.secondary]) {
-      if (!a) continue
+    const candidates: KnownAddress[] = [{ kind: 'default', ...c.addresses.default }]
+    if (c.addresses.secondary) candidates.push({ kind: 'secondary', ...c.addresses.secondary })
+    for (const a of candidates) {
       const k = `${a.street}|${a.city}`.toLowerCase()
       if (seen.has(k)) continue
       seen.add(k)
@@ -214,7 +217,7 @@ function MeetingPointField({
     city: selected === 'custom' ? value!.city : '',
   })
   const customValid = custom.street.trim() && custom.city.trim()
-  const label = direction === 'aller' ? 'Aller' : 'Retour'
+  const label = DIR_LABEL[direction]
   const hint = direction === 'aller' ? 'je prends les enfants' : 'je dépose les enfants'
 
   return (
@@ -234,8 +237,7 @@ function MeetingPointField({
             setCustomOpen(false)
             if (v === 'none') onChange(null)
             else {
-              const a = known[Number(v.slice(1))]
-              onChange({ kind: 'default', ...a })
+              onChange(known[Number(v.slice(1))])
             }
           }}
         >

@@ -30,7 +30,7 @@ service cloud.firestore {
                     && request.resource.data.role == 'parent'
                     && request.resource.data.active == true;
       allow update: if isAdmin()
-                    || (isAuth() && request.auth.uid == uid
+                    || (isAuth() && isActive() && request.auth.uid == uid
                         && onlyKeys(['displayName', 'updatedAt']));
     }
 
@@ -38,7 +38,7 @@ service cloud.firestore {
       allow read: if isAuth();
       allow create, delete: if isAdmin();
       allow update: if isAdmin()
-                    || (isAuth() && email() in resource.data.parentEmails
+                    || (isAuth() && isActive() && email() in resource.data.parentEmails
                         && onlyKeys(['addresses', 'updatedAt']));
     }
 

@@ -1,5 +1,5 @@
 import Papa from 'papaparse'
-import { createChild, findChildByFirstName, updateChild } from './children'
+import { createChild, listChildren, updateChild } from './children'
 import { csvFamilyRowSchema, type CsvFamilyRow } from '../utils/validation'
 import type { ChildAddresses, ChildParent } from '../types'
 
@@ -18,7 +18,7 @@ export const CSV_HEADER =
   'prenom_enfant;prenom_parent1;email_parent1;adresse1_rue;adresse1_cp;adresse1_ville;label_adresse1;prenom_parent2;email_parent2;adresse2_rue;adresse2_cp;adresse2_ville;label_adresse2'
 
 /** Parse un texte CSV (séparateur ';', UTF-8) en lignes brutes. */
-export function parseCsv(text: string): Record<string, string>[] {
+function parseCsv(text: string): Record<string, string>[] {
   const result = Papa.parse<Record<string, string>>(text, {
     header: true,
     delimiter: ';',
@@ -69,6 +69,8 @@ function buildAddresses(row: CsvFamilyRow): ChildAddresses {
 export async function importFamiliesCsv(text: string): Promise<ImportReport> {
   const report: ImportReport = { created: 0, updated: 0, errors: [] }
   const rows = parseCsv(text)
+  // Une seule lecture : déduplication par prénom exact en mémoire.
+  const byFirstName = new Map((await listChildren()).map((c) => [c.firstName, c]))
 
   for (let i = 0; i < rows.length; i++) {
     const line = i + 2 // en-tête + base 1
@@ -91,9 +93,9 @@ export async function importFamiliesCsv(text: string): Promise<ImportReport> {
       active: true,
     }
     try {
-      const existing = await findChildByFirstName(row.prenom_enfant)
+      const existing = byFirstName.get(row.prenom_enfant)
       if (existing) {
-        await updateChild(existing.id, input)
+        await updateChild(existing.id, input, { keepActive: true })
         report.updated++
       } else {
         await createChild(input)

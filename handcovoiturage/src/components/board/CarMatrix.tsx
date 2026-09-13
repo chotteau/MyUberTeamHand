@@ -1,10 +1,10 @@
-import { useMemo } from 'react'
 import { useMutation } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { AlertTriangle, CheckCircle2, MapPin, Users, X } from 'lucide-react'
-import { assignChild, carOf as carOfIn, meetKey, orderCars, passengersKey, removeCarDirection, seatsOf, takeAll } from '../../services/board'
+import { assignChild, carOf as carOfIn, meetKey, orderCars, passengersKey, removeCarDirection, seatsOf, summarizeDirection, takeAll } from '../../services/board'
 import { HelpLink } from '../ui/HelpLink'
 import { formatAddress, tripAddressLabel } from '../../utils/address'
+import { DIR_LABEL, atDirection } from '../../utils/direction'
 import { formatTime } from '../../utils/dates'
 import type { Car, Direction, Event, Participant } from '../../types'
 
@@ -17,8 +17,6 @@ interface Props {
   canRemoveCar?: boolean
 }
 
-const DIR_LABEL: Record<Direction, string> = { aller: 'Aller', retour: 'Retour' }
-
 /**
  * Matrice enfants × voitures, aller et retour côte à côte.
  * Cellule = bouton radio ; colonne « — » = sans voiture ; ligne Total « n/places » :
@@ -28,19 +26,9 @@ const DIR_LABEL: Record<Direction, string> = { aller: 'Aller', retour: 'Retour' 
 export function CarMatrix({ event, participants, cars, editable, canRemoveCar }: Props) {
   const directions: Direction[] = event.returnTime ? ['aller', 'retour'] : ['aller']
 
-  const rows = useMemo(
-    () => [...participants].sort((a, b) => a.childName.localeCompare(b.childName)),
-    [participants],
-  )
-  const columns = useMemo(
-    () =>
-      directions.map((d) => ({
-        direction: d,
-        cars: orderCars(cars).filter((c) => c[d]),
-      })),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [cars, event.returnTime],
-  )
+  const rows = [...participants].sort((a, b) => a.childName.localeCompare(b.childName))
+  const ordered = orderCars(cars)
+  const columns = directions.map((d) => ({ direction: d, cars: ordered.filter((c) => c[d]) }))
 
   const assign = useMutation({
     mutationFn: (v: { childId: string; direction: Direction; carId: string | null }) =>
@@ -61,27 +49,26 @@ export function CarMatrix({ event, participants, cars, editable, canRemoveCar }:
 
   const carOf = (childId: string, d: Direction) => carOfIn(cars, childId, d)
 
+  // Mêmes compteurs que le planning et le dashboard (summarizeDirection) + dépassements par voiture.
   const alerts = directions.flatMap((d) => {
-    const present = rows.filter((p) => p[d])
-    const active = cars.filter((c) => c[d])
-    const label = d === 'aller' ? "à l'aller" : 'au retour'
-    if (present.length === 0) return []
-    if (active.length === 0) return [`Aucune voiture ${label}`]
-    const over = active
-      .filter((c) => c[passengersKey(d)].length > seatsOf(c))
+    const s = summarizeDirection({ participants, cars }, d)
+    const label = atDirection(d)
+    if (s.present === 0) return []
+    if (s.cars === 0) return [`Aucune voiture ${label}`]
+    const over = cars
+      .filter((c) => c[d] && c[passengersKey(d)].length > seatsOf(c))
       .map((c) => `Voiture de ${c.driverName} ${label} : ${c[passengersKey(d)].length} enfants pour ${seatsOf(c)} places`)
-    const without = present.filter((p) => !carOf(p.childId, d)).length
-    if (without === 0) return over
-    const allFull = active.every((c) => c[passengersKey(d)].length >= seatsOf(c))
+    if (s.withoutCar === 0) return over
     return [
-      `${without} enfant${without > 1 ? 's' : ''} sans voiture ${label}` +
-        (allFull ? ` — plus de place : ajouter un véhicule ?` : ''),
+      `${s.withoutCar} enfant${s.withoutCar > 1 ? 's' : ''} sans voiture ${label}` +
+        (s.full ? ` — plus de place : ajouter un véhicule ?` : ''),
       ...over,
     ]
   })
 
   /** Placer un enfant ; si la voiture est pleine, on demande avant de forcer. */
   function place(childId: string, childName: string, direction: Direction, carId: string | null) {
+    if (carOf(childId, direction) === carId) return // déjà là : rien à faire
     const car = carId ? cars.find((c) => c.id === carId) : undefined
     if (car) {
       const n = car[passengersKey(direction)].length
@@ -156,8 +143,7 @@ export function CarMatrix({ event, participants, cars, editable, canRemoveCar }:
                   canRemove={!!canRemoveCar && !busy}
                   onRemove={(carId) => {
                     const car = cars.find((c) => c.id === carId)
-                    const label = col.direction === 'aller' ? "à l'aller" : 'au retour'
-                    if (confirm(`Retirer la voiture de ${car?.driverName ?? '?'} ${label} ?`)) {
+                    if (confirm(`Retirer la voiture de ${car?.driverName ?? '?'} ${atDirection(col.direction)} ?`)) {
                       remove.mutate({ carId, direction: col.direction })
                     }
                   }}

@@ -20,9 +20,8 @@ export default function Dashboard() {
     const s = boards[i]?.data
     if (!s) return []
     const out: string[] = []
-    const present = s.aller.present + s.retour.present
-    if (present > 0 && s.aller.cars === 0) out.push("aucune voiture à l'aller")
-    if (present > 0 && e.returnTime && s.retour.cars === 0) out.push('aucune voiture au retour')
+    if (s.aller.present > 0 && s.aller.cars === 0) out.push("aucune voiture à l'aller")
+    if (s.retour.present > 0 && s.retour.cars === 0) out.push('aucune voiture au retour')
     if (s.aller.withoutCar > 0) out.push(`${s.aller.withoutCar} sans voiture à l'aller`)
     if (s.retour.withoutCar > 0) out.push(`${s.retour.withoutCar} sans voiture au retour`)
     return out.length ? [{ event: e, text: out.join(' · ') }] : []

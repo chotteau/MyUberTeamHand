@@ -88,7 +88,8 @@ export default function Aide() {
               Bloc <b>Ma voiture</b> : <b>J'emmène</b> et/ou <b>Je ramène</b>, et le nombre de{' '}
               <b>places</b> disponibles pour les enfants (4 par défaut, réglable de 2 à 6 — sans
               vous compter, votre enfant en occupe une). Votre enfant monte avec vous — sauf s'il est
-              déjà placé chez quelqu'un d'autre, auquel cas l'app vous demande s'il y reste.
+              déjà placé chez quelqu'un d'autre, auquel cas l'app vous demande s'il y reste ; et si
+              une autre voiture a de la place, elle vous demande s'il monte avec vous ou avec l'autre.
             </p>
             <p>
               Facultatif, une fois déclaré : un <b>lieu de rendez-vous</b> par direction (chez vous,

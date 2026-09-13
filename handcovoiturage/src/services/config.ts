@@ -10,7 +10,7 @@ export function newCalendarToken(): string {
 }
 
 /** Valeurs par défaut. */
-export const DEFAULT_CONFIG: AppConfig = {
+const DEFAULT_CONFIG: AppConfig = {
   season: '2025-2026',
   seasonStart: Timestamp.fromDate(new Date(2025, 8, 1)),
   seasonEnd: Timestamp.fromDate(new Date(2026, 5, 30)),

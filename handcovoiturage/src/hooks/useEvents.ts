@@ -40,7 +40,7 @@ export function useEvent(id: string | undefined) {
 }
 
 /** Résumé aller / retour d'un événement (compteurs dérivés). */
-export async function fetchEventSummary(eventId: string) {
+async function fetchEventSummary(eventId: string) {
   const board = await getBoard(eventId)
   return {
     board,

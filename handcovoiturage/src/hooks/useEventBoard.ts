@@ -21,8 +21,14 @@ export function useEventBoard(eventId: string | undefined): EventBoard {
 
   useEffect(() => {
     if (!eventId) return
-    const unsubP = subscribeParticipants(eventId, setParticipants, setError)
-    const unsubC = subscribeCars(eventId, setCars, setError)
+    // En cas d'erreur, on sort du chargement (sinon spinner infini) : le message est affiché.
+    const fail = (e: Error) => {
+      setError(e)
+      setParticipants((p) => p ?? [])
+      setCars((c) => c ?? [])
+    }
+    const unsubP = subscribeParticipants(eventId, setParticipants, fail)
+    const unsubC = subscribeCars(eventId, setCars, fail)
     return () => {
       unsubP()
       unsubC()

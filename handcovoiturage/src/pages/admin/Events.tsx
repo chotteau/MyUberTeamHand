@@ -131,7 +131,6 @@ function EventRow({
   onDelete: () => void
 }) {
   const past = isEventPast(event)
-  const frozen = past
   const scheduled = event.status === 'scheduled'
   return (
     <div className={`card !p-3 ${past || !scheduled ? 'opacity-60' : ''}`}>
@@ -148,7 +147,7 @@ function EventRow({
           </Link>
           <EventSummary event={event} />
         </div>
-        {!frozen && (
+        {!past && (
           <div className="flex shrink-0 gap-0.5">
             <button onClick={onEdit} className="btn-ghost p-2 text-slate-500" aria-label="Modifier" title="Modifier">
               <Pencil className="h-4 w-4" />

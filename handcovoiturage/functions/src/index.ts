@@ -16,8 +16,10 @@ async function assertAdmin(uid: string | undefined): Promise<void> {
   }
 }
 
+const opts = { region: 'europe-west1', maxInstances: 5 } as const
+
 /** Callable admin : synchro FFHB immédiate. */
-export const triggerIcsSync = onCall({ region: 'europe-west1' }, async (request) => {
+export const triggerIcsSync = onCall(opts, async (request) => {
   await assertAdmin(request.auth?.uid)
   return await runIcsSync()
 })
@@ -26,7 +28,7 @@ export const triggerIcsSync = onCall({ region: 'europe-west1' }, async (request)
  * Callable publique : l'email est-il déclaré comme parent d'un enfant ?
  * Sert à refuser la création de compte d'un email inconnu, sans exposer la liste.
  */
-export const isEmailDeclared = onCall({ region: 'europe-west1' }, async (request) => {
+export const isEmailDeclared = onCall(opts, async (request) => {
   const email = String((request.data as { email?: string })?.email ?? '').trim().toLowerCase()
   if (!email) return { declared: false }
   const snap = await db

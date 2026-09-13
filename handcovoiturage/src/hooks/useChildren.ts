@@ -14,26 +14,31 @@ import { EVENTS_KEY } from './useEvents'
 import type { ChildAddresses } from '../types'
 
 export const CHILDREN_KEY = ['children']
+export const STATS_KEY = ['stats']
 
 /** Tous les enfants (admin et matrice). */
 export function useChildren() {
   return useQuery({ queryKey: CHILDREN_KEY, queryFn: listChildren })
 }
 
-/** Mes enfants — liaison par l'email du compte. */
+/** Mes enfants actifs — liaison par l'email du compte (un enfant désactivé par l'admin n'apparaît plus). */
 export function useMyChildren() {
   const { profile } = useAuth()
   const email = profile?.email ?? ''
   return useQuery({
     queryKey: [...CHILDREN_KEY, 'mine', email],
-    queryFn: () => listMyChildren(email),
+    queryFn: async () => (await listMyChildren(email)).filter((c) => c.active),
     enabled: !!email,
   })
 }
 
+/** Les stats dérivent des enfants (familles sans trajet) : invalidées avec eux. */
 function useInvalidateChildren() {
   const qc = useQueryClient()
-  return () => qc.invalidateQueries({ queryKey: CHILDREN_KEY })
+  return () => {
+    qc.invalidateQueries({ queryKey: CHILDREN_KEY })
+    qc.invalidateQueries({ queryKey: STATS_KEY })
+  }
 }
 
 export function useSaveChild() {

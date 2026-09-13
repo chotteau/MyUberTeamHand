@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useMutation } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { CarFront, ShieldCheck } from 'lucide-react'
-import { MAX_SEATS, MIN_SEATS, clampSeats, setMyCar } from '../../services/board'
+import { SEAT_CHOICES, clampSeats, setMyCar } from '../../services/board'
 import { useUsers } from '../../hooks/useUsers'
 import { useChildren } from '../../hooks/useChildren'
 import { Spinner } from '../ui/Spinner'
@@ -86,7 +86,7 @@ export function AdminCarBlock({ eventId, cars, participants, hasReturn, defaultS
         <label className="flex items-center gap-1.5 text-sm">
           Places
           <select className="input !w-auto !py-1.5" value={seats} onChange={(e) => setSeats(Number(e.target.value))}>
-            {Array.from({ length: MAX_SEATS - MIN_SEATS + 1 }, (_, i) => MIN_SEATS + i).map((n) => (
+            {SEAT_CHOICES.map((n) => (
               <option key={n} value={n}>{n}</option>
             ))}
           </select>
