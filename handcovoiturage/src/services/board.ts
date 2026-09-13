@@ -419,7 +419,36 @@ export function childrenSeatedElsewhere(
   return out
 }
 
-/** Admin : retire une voiture ; ses passagers sont rebasculés si possible. */
+/**
+ * Admin : retire une voiture pour UNE direction (colonne). Ses passagers sont
+ * rebasculés si possible ; si l'autre direction n'est plus active non plus,
+ * la voiture est supprimée.
+ */
+export async function removeCarDirection(
+  eventId: string,
+  carId: string,
+  d: Direction,
+  cars: Car[],
+  threshold = DEFAULT_THRESHOLD,
+): Promise<void> {
+  const car = cars.find((c) => c.id === carId)
+  if (!car) return
+  const other: Direction = d === 'aller' ? 'retour' : 'aller'
+  if (!car[other]) return removeCar(eventId, carId, cars, threshold)
+
+  const plan = new SeatingPlan(cars, threshold)
+  for (const id of car[passengersKey(d)]) plan.autoSeat(id, d, carId)
+  const batch = writeBatch(db)
+  new SeatingPlanView(plan, cars.filter((c) => c.id !== carId)).apply(batch, eventId)
+  batch.update(doc(carsCol(eventId), carId), {
+    [d]: false,
+    [passengersKey(d)]: [],
+    updatedAt: serverTimestamp(),
+  })
+  await batch.commit()
+}
+
+/** Admin : retire une voiture (aller et retour) ; ses passagers sont rebasculés si possible. */
 export async function removeCar(
   eventId: string,
   carId: string,

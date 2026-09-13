@@ -313,7 +313,7 @@ Page accessible à tous — **vue saison uniquement**.
 ### 3.3 Admin (en plus)
 - `/admin` — événements de la semaine, alertes (enfants sans voiture, événements sans voiture), dernière sync ICS
 - `/admin/evenements` — liste 4 semaines / saison, passés grisés, sync ICS, créer / modifier / annuler / `vacances` / réactiver. Suppression réservée aux `manual`. Titre → `/admin/event/:id`.
-- `/admin/event/:id` — même page que `/event/:id` en **mode admin** : Modifier l'événement, retirer une voiture (✕), **ajouter la voiture d'un parent** à sa place (liste des parents actifs sans voiture sur l'événement, aller / retour).
+- `/admin/event/:id` — même page que `/event/:id` en **mode admin** : Modifier l'événement, retirer une voiture **pour une direction** (✕ dans l'en-tête de colonne aller ou retour ; la voiture disparaît quand les deux sont retirées), **ajouter la voiture d'un parent** à sa place (liste des parents actifs sans voiture sur l'événement, aller / retour).
 - `/admin/familles` — liste, import CSV, fiche enfant (prénom, parents, adresses, actif) ; section **Comptes connectés** : activer / désactiver un parent (compte désactivé = écran bloquant + règles Firestore refusent ses écritures)
 - `/admin/config` — saison, 2 jours d'entraînement, URL ICS, nom + token du calendrier (bouton « Regénérer le lien »), seuil orange, bouton « Générer / Regénérer le calendrier »
 

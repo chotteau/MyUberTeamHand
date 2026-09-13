@@ -2,7 +2,7 @@ import { useMemo } from 'react'
 import { useMutation } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { AlertTriangle, CheckCircle2, Users, X } from 'lucide-react'
-import { assignChild, carOf as carOfIn, orderCars, passengersKey, removeCar, takeAll } from '../../services/board'
+import { assignChild, carOf as carOfIn, orderCars, passengersKey, removeCarDirection, takeAll } from '../../services/board'
 import { HelpLink } from '../ui/HelpLink'
 import { tripAddressLabel } from '../../utils/address'
 import { formatTime } from '../../utils/dates'
@@ -53,7 +53,8 @@ export function CarMatrix({ event, participants, cars, editable, threshold, canR
     onError: () => toast.error('Échec'),
   })
   const remove = useMutation({
-    mutationFn: (carId: string) => removeCar(event.id, carId, cars, threshold),
+    mutationFn: (v: { carId: string; direction: Direction }) =>
+      removeCarDirection(event.id, v.carId, v.direction, cars, threshold),
     onError: () => toast.error('Échec'),
   })
   const busy = assign.isPending || grab.isPending || remove.isPending
@@ -139,7 +140,11 @@ export function CarMatrix({ event, participants, cars, editable, threshold, canR
                   onGrab={(carId) => grab.mutate({ direction: col.direction, carId })}
                   canRemove={!!canRemoveCar && !busy}
                   onRemove={(carId) => {
-                    if (confirm('Retirer cette voiture (aller et retour) ?')) remove.mutate(carId)
+                    const car = cars.find((c) => c.id === carId)
+                    const label = col.direction === 'aller' ? "à l'aller" : 'au retour'
+                    if (confirm(`Retirer la voiture de ${car?.driverName ?? '?'} ${label} ?`)) {
+                      remove.mutate({ carId, direction: col.direction })
+                    }
                   }}
                 />
               ))}
@@ -280,8 +285,8 @@ function CarHeaders({
                 type="button"
                 onClick={() => onRemove(car.id)}
                 className="rounded p-0.5 text-slate-400 hover:bg-red-50 hover:text-danger"
-                aria-label="Retirer cette voiture"
-                title="Retirer cette voiture (admin)"
+                aria-label="Retirer cette voiture pour cette direction"
+                title="Retirer cette voiture pour cette direction (admin)"
               >
                 <X className="h-3 w-3" />
               </button>
