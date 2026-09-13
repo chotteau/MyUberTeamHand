@@ -120,6 +120,7 @@ export interface Car {
   retour: boolean
   passengersAller: string[]
   passengersRetour: string[]
+  createdAt?: Timestamp // ordre de déclaration (absent sur les voitures antérieures au 13/09/2026)
   updatedAt: Timestamp
 }
 

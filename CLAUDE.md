@@ -96,7 +96,7 @@ handcovoiturage/
 
 ## Règles métier à ne jamais violer
 
-1. **L'enfant du chauffeur est toujours dans sa voiture** pour chaque direction active
+1. **L'enfant du chauffeur monte avec lui par défaut** quand il déclare une direction (sauf déjà placé ailleurs + choix du parent) ; pas de verrou ensuite
 2. **Aller et retour sont indépendants**
 3. **Un enfant est dans au plus une voiture par direction**
 4. **Seul le chauffeur ajoute/retire sa voiture** (1 par chauffeur par événement)
@@ -104,7 +104,7 @@ handcovoiturage/
 6. **Tout le monde remplit** : n'importe quel parent place/déplace n'importe quel enfant
 7. **Pas de limite de places** — orange à partir de `config.carWarningThreshold` (5), jamais bloquant
 8. **Gel après l'heure H** — `isEventEditable(event)` = `departureTime > now()` et statut `scheduled`, vérifié côté UI **et** règles Firestore
-9. **Retirer une voiture/direction → passagers sans voiture ; désinscrire un enfant → retiré de sa voiture**
+9. **Placement automatique** (`SeatingPlan` dans `services/board.ts`) : première voiture déclarée sous le seuil ; retirer une voiture rebascule ses passagers ; désinscrire un enfant le retire de sa voiture
 10. **L'appli fait foi ; le calendrier est un miroir**
 11. **Prénoms uniquement** — jamais de nom de famille, téléphone ou email affiché
 
@@ -125,7 +125,7 @@ handcovoiturage/
 ```
 1. Vérifier token == config/app.calendarToken sinon 404
 2. Charger events de (now − 7 j) à seasonEnd + leurs participants et cars
-3. 1 VEVENT par événement ; DESCRIPTION = voitures aller / retour avec passagers et adresses ; annulés → STATUS:CANCELLED
+3. 1 VEVENT par événement ; DESCRIPTION = voitures aller / retour (une puce par enfant, adresse sans libellé, voitures vides omises) ; annulés → STATUS:CANCELLED
 4. Content-Type text/calendar ; Cache-Control max-age=300
 ```
 

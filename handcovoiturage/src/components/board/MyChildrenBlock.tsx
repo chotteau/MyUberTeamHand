@@ -4,6 +4,7 @@ import { Baby } from 'lucide-react'
 import { setParticipation, type ParticipationInput } from '../../services/board'
 import { tripAddressFromChild } from '../../utils/address'
 import { TripAddressPicker } from './TripAddressPicker'
+import { HelpLink } from '../ui/HelpLink'
 import type { Car, Child, Direction, Participant, TripAddress } from '../../types'
 
 interface Props {
@@ -14,6 +15,7 @@ interface Props {
   cars: Car[]
   hasReturn: boolean
   editable: boolean
+  threshold: number
 }
 
 /** Bloc « Mes enfants » : présent aller / retour + adresse par direction. */
@@ -25,10 +27,19 @@ export function MyChildrenBlock({
   cars,
   hasReturn,
   editable,
+  threshold,
 }: Props) {
   const save = useMutation({
     mutationFn: ({ child, input }: { child: Child; input: ParticipationInput }) =>
-      setParticipation(eventId, child, uid, input, cars),
+      setParticipation(
+        eventId,
+        child,
+        uid,
+        input,
+        participants.find((p) => p.childId === child.id),
+        cars,
+        threshold,
+      ),
     onError: () => toast.error("Impossible d'enregistrer"),
   })
 
@@ -45,6 +56,7 @@ export function MyChildrenBlock({
       <h2 className="flex items-center gap-2 text-sm font-semibold text-slate-600">
         <Baby className="h-4 w-4 text-primary" />
         Mes enfants
+        <HelpLink section="enfants" label="Mes enfants" />
       </h2>
 
       {children.map((child) => {

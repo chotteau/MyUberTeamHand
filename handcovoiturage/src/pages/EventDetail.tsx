@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { ArrowLeft, Lock, Pencil, ShieldCheck } from 'lucide-react'
 import { EventFormModal } from '../components/admin/EventFormModal'
+import { OrientationHint } from '../components/ui/OrientationHint'
 import { useEvent } from '../hooks/useEvents'
 import { useMyChildren } from '../hooks/useChildren'
 import { useEventBoard } from '../hooks/useEventBoard'
@@ -10,6 +11,7 @@ import { useAuth } from '../hooks/useAuth'
 import { MyChildrenBlock } from '../components/board/MyChildrenBlock'
 import { MyCarBlock } from '../components/board/MyCarBlock'
 import { CarMatrix } from '../components/board/CarMatrix'
+import { AdminCarBlock } from '../components/board/AdminCarBlock'
 import { EventSummary } from '../components/events/EventSummary'
 import { EventStatusBadge, EventTypeBadge } from '../components/ui/StatusBadge'
 import { PageSpinner } from '../components/ui/Spinner'
@@ -43,6 +45,7 @@ export default function EventDetail({ adminMode = false }: { adminMode?: boolean
   }
 
   const admin = adminMode && isAdmin
+  const threshold = config?.carWarningThreshold ?? 5
   const editable = isEventEditable(event)
   const past = isEventPast(event)
   const hasReturn = !!event.returnTime
@@ -75,6 +78,8 @@ export default function EventDetail({ adminMode = false }: { adminMode?: boolean
           </div>
         )}
       </div>
+
+      <OrientationHint />
 
       <header className={`card space-y-2 ${past ? 'opacity-70' : ''}`}>
         <div className="flex flex-wrap items-center gap-2">
@@ -130,6 +135,7 @@ export default function EventDetail({ adminMode = false }: { adminMode?: boolean
               cars={cars}
               hasReturn={hasReturn}
               editable={editable}
+              threshold={threshold}
             />
           )}
           {editable && activeChildren.length > 0 && (
@@ -142,6 +148,7 @@ export default function EventDetail({ adminMode = false }: { adminMode?: boolean
                 cars={cars}
                 hasReturn={hasReturn}
                 editable={editable}
+                threshold={threshold}
               />
               <MyCarBlock
                 eventId={event.id}
@@ -155,8 +162,19 @@ export default function EventDetail({ adminMode = false }: { adminMode?: boolean
                 participants={participants}
                 hasReturn={hasReturn}
                 editable={editable}
+                threshold={threshold}
               />
             </div>
+          )}
+
+          {admin && editable && (
+            <AdminCarBlock
+              eventId={event.id}
+              cars={cars}
+              participants={participants}
+              hasReturn={hasReturn}
+              threshold={threshold}
+            />
           )}
 
           <CarMatrix
@@ -164,7 +182,7 @@ export default function EventDetail({ adminMode = false }: { adminMode?: boolean
             participants={participants}
             cars={cars}
             editable={editable}
-            threshold={config?.carWarningThreshold ?? 5}
+            threshold={threshold}
             canRemoveCar={admin}
           />
         </>

@@ -121,7 +121,8 @@ Une voiture par chauffeur par événement. **Document id = driverUid.**
   aller: boolean,                 // "j'emmène"
   retour: boolean,                // "je ramène"
   passengersAller: string[],      // childIds — inclut driverChildIds si aller = true
-  passengersRetour: string[],     // childIds — inclut driverChildIds si retour = true
+  passengersRetour: string[],     // childIds
+  createdAt?: Timestamp,          // ordre de déclaration (absent sur les voitures créées avant le 13/09/2026 → classées après)
   updatedAt: Timestamp
 }
 ```
@@ -214,14 +215,15 @@ Sur la page événement, bloc **« Mes enfants »** — un sous-bloc par enfant 
 
 - « Autre… » ouvre 3 champs (rue, CP, ville) — enregistrés **uniquement** dans le participant (`kind: 'custom'`), jamais sur la fiche enfant.
 - Sauvegarde immédiate à chaque changement (pas de bouton Valider) → `participants/{childId}`.
+- **Placement automatique** : une direction nouvellement cochée place l'enfant dans la **première voiture active (ordre de déclaration) ayant moins de `carWarningThreshold` enfants** ; si toutes sont pleines → « sans voiture » + alerte « peut-être plus de place : ajouter un véhicule ? ».
 - Décocher une direction retire automatiquement l'enfant de la voiture où il était pour cette direction.
 - Seuls les parents de l'enfant (ou l'admin) peuvent inscrire / désinscrire.
 
 ### 2.5 Déclaration d'une voiture (chauffeur)
 
 Bloc **« Ma voiture »** : deux interrupteurs **« J'emmène »** / **« Je ramène »**.
-- Activer une direction crée/maj `cars/{uid}` avec l'enfant du chauffeur déjà dans la liste de passagers correspondante, **et le retire de toute autre voiture** pour cette direction (règles 1 et 3).
-- Désactiver une direction (ou les deux → suppression de la voiture) : ses passagers redeviennent « sans voiture » pour cette direction. Pas de retour automatique dans une voiture précédente : le bandeau d'alerte signale les enfants à re-placer.
+- Activer une direction crée/maj `cars/{uid}` (avec `createdAt` = ordre de déclaration). L'enfant du chauffeur est inscrit (adresse par défaut) et placé dans sa voiture — **sauf** s'il est déjà placé dans une autre voiture : l'app demande alors, par direction, s'il y reste ou s'il monte avec son parent. L'enfant n'est **pas verrouillé** dans la voiture de son parent.
+- Désactiver une direction (ou les deux → suppression de la voiture) : ses passagers sont **rebasculés automatiquement** dans les autres voitures actives ayant de la place (ordre de déclaration, jusqu'au seuil), le reste passe « sans voiture » (alerte).
 - Aucune capacité demandée.
 - Seul le chauffeur (ou l'admin) crée/supprime sa voiture. Une seule voiture par chauffeur par événement.
 
@@ -243,7 +245,7 @@ Total             │    2    │     1     │     │    1    │    2     │
 
 - Une ligne par enfant inscrit (aller ou retour) ; les enfants des chauffeurs apparaissent toujours.
 - Une colonne par voiture et par direction + une colonne « Sans voiture ».
-- Cellule = bouton radio : cliquer met l'enfant dans cette voiture pour cette direction (et le retire de l'autre). Cliquer « — » le sort de toute voiture.
+- Cellule = bouton radio : cliquer met l'enfant dans cette voiture pour cette direction (et le retire de l'autre). Cliquer « Sans voiture » le sort de toute voiture. Les colonnes suivent l'ordre de déclaration des voitures.
 - Cellule grisée « ─ » si l'enfant n'est pas inscrit pour cette direction.
 - Ligne **Total** : nombre d'enfants par voiture, **orange si ≥ `carWarningThreshold`** (5).
 - Bandeau d'alertes au-dessus : « ❗ 2 enfants sans voiture à l'aller », « ❗ Aucune voiture au retour ».
@@ -280,7 +282,7 @@ RETOUR — départ 19:00
 
 Mis à jour le 12/09 à 14:32 — https://myuberteamhand.web.app/event/xxx
 ```
-- Prénoms uniquement, adresses de prise en charge (voulues par l'équipe), **jamais** d'email.
+- Prénoms uniquement, adresses de prise en charge (voulues par l'équipe), **jamais** d'email. Une voiture sans passager pour une direction n'est pas mentionnée.
 - `Cache-Control: max-age=60`. Les clients calendrier se resynchronisent périodiquement (Google : quelques heures ; Apple : réglable).
 
 ### 2.8 Statistiques
@@ -304,14 +306,14 @@ Page accessible à tous — **vue saison uniquement**.
 ### 3.2 Parent
 - `/` → `/planning`
 - `/planning` — 4 semaines glissantes (bouton « Voir toute la saison »). Par événement : date/heure/lieu, badge statut, et **résumé** : « Lucas : aller ✔ retour ✔ » / « À déclarer », « 3 voitures · 1 enfant sans voiture ».
-- `/event/:id` — en-tête + « Mes enfants » (2.4) + « Ma voiture » (2.5) + matrice (2.6). L'admin y est un parent comme les autres.
+- `/event/:id` — en-tête + « Mes enfants » (2.4) + « Ma voiture » (2.5) + matrice (2.6). Chaque bloc a une icône ⓘ vers la section correspondante de `/aide`. Sur téléphone en paysage, un bandeau invite à passer en portrait. L'admin y est un parent comme les autres.
 - `/stats`
 - `/mon-profil` — prénom ; adresses par défaut / secondaire de mes enfants
 
 ### 3.3 Admin (en plus)
 - `/admin` — événements de la semaine, alertes (enfants sans voiture, événements sans voiture), dernière sync ICS
 - `/admin/evenements` — liste 4 semaines / saison, passés grisés, sync ICS, créer / modifier / annuler / `vacances` / réactiver. Suppression réservée aux `manual`. Titre → `/admin/event/:id`.
-- `/admin/event/:id` — même page que `/event/:id` en **mode admin** : Modifier l'événement, retirer une voiture (✕).
+- `/admin/event/:id` — même page que `/event/:id` en **mode admin** : Modifier l'événement, retirer une voiture (✕), **ajouter la voiture d'un parent** à sa place (liste des parents actifs sans voiture sur l'événement, aller / retour).
 - `/admin/familles` — liste, import CSV, fiche enfant (prénom, parents, adresses, actif) ; section **Comptes connectés** : activer / désactiver un parent (compte désactivé = écran bloquant + règles Firestore refusent ses écritures)
 - `/admin/config` — saison, 2 jours d'entraînement, URL ICS, nom + token du calendrier (bouton « Regénérer le lien »), seuil orange, bouton « Générer / Regénérer le calendrier »
 
@@ -319,7 +321,7 @@ Page accessible à tous — **vue saison uniquement**.
 
 ## 4. Règles métier
 
-1. **L'enfant du chauffeur est toujours dans sa voiture** pour chaque direction active.
+1. **L'enfant du chauffeur monte avec lui par défaut** quand il déclare une direction (sauf s'il est déjà placé ailleurs et que le parent choisit de l'y laisser). Il n'est pas verrouillé : tout le monde peut le déplacer ensuite.
 2. **Aller et retour sont indépendants** (participation, voitures, passagers).
 3. **Un enfant est dans au plus une voiture par direction.**
 4. **Seul le chauffeur ajoute / retire sa voiture** (1 voiture par chauffeur par événement). L'admin peut tout faire.
@@ -327,7 +329,7 @@ Page accessible à tous — **vue saison uniquement**.
 6. **Tout le monde remplit** : n'importe quel parent authentifié place / déplace n'importe quel enfant dans n'importe quelle voiture.
 7. **Pas de limite de places** — compteur orange à partir de `carWarningThreshold` (5) enfants.
 8. **Gel après l'heure H** : `departureTime < now()` → tout est en lecture seule (UI + règles Firestore).
-9. **Retirer une voiture / une direction** → ses passagers redeviennent « sans voiture ». **Désinscrire un enfant** → retiré de sa voiture.
+9. **Placement automatique** : un enfant inscrit va dans la première voiture déclarée ayant de la place (< seuil) ; **retirer une voiture / une direction** rebascule ses passagers de la même façon, le reste passe « sans voiture ». **Désinscrire un enfant** → retiré de sa voiture.
 10. **L'appli fait foi** ; le calendrier ICS est un miroir en lecture seule.
 11. **Prénoms uniquement**, jamais de nom de famille, de téléphone ni d'email affiché.
 

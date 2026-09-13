@@ -119,7 +119,8 @@ function directionBlock(
         seated.add(p.childId)
         return withAddr(p)
       })
-    lines.push(`🚗 ${car.driverName || 'Chauffeur'}${names.length ? '' : ' : —'}`)
+    if (names.length === 0) continue // voiture vide : non mentionnée
+    lines.push(`🚗 ${car.driverName || 'Chauffeur'}`)
     for (const n of names) lines.push(`   • ${n}`)
   }
 

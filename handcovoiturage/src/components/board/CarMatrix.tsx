@@ -2,7 +2,8 @@ import { useMemo } from 'react'
 import { useMutation } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { AlertTriangle, CheckCircle2, Users, X } from 'lucide-react'
-import { assignChild, passengersKey, removeCar, takeAll } from '../../services/board'
+import { assignChild, carOf as carOfIn, orderCars, passengersKey, removeCar, takeAll } from '../../services/board'
+import { HelpLink } from '../ui/HelpLink'
 import { tripAddressLabel } from '../../utils/address'
 import { formatTime } from '../../utils/dates'
 import type { Car, Direction, Event, Participant } from '../../types'
@@ -35,9 +36,7 @@ export function CarMatrix({ event, participants, cars, editable, threshold, canR
     () =>
       directions.map((d) => ({
         direction: d,
-        cars: cars
-          .filter((c) => c[d])
-          .sort((a, b) => a.driverName.localeCompare(b.driverName)),
+        cars: orderCars(cars).filter((c) => c[d]),
       })),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [cars, event.returnTime],
@@ -54,25 +53,26 @@ export function CarMatrix({ event, participants, cars, editable, threshold, canR
     onError: () => toast.error('Échec'),
   })
   const remove = useMutation({
-    mutationFn: (carId: string) => removeCar(event.id, carId),
+    mutationFn: (carId: string) => removeCar(event.id, carId, cars, threshold),
     onError: () => toast.error('Échec'),
   })
   const busy = assign.isPending || grab.isPending || remove.isPending
 
-  /** Voiture d'un enfant pour une direction (au plus une). */
-  const carOf = (childId: string, d: Direction) =>
-    cars.find((c) => c[d] && c[passengersKey(d)].includes(childId))?.id ?? null
+  const carOf = (childId: string, d: Direction) => carOfIn(cars, childId, d)
 
   const alerts = directions.flatMap((d) => {
     const present = rows.filter((p) => p[d])
     const active = cars.filter((c) => c[d])
+    const label = d === 'aller' ? "à l'aller" : 'au retour'
     if (present.length === 0) return []
-    if (active.length === 0)
-      return [`Aucune voiture ${d === 'aller' ? "à l'aller" : 'au retour'}`]
+    if (active.length === 0) return [`Aucune voiture ${label}`]
     const without = present.filter((p) => !carOf(p.childId, d)).length
-    return without > 0
-      ? [`${without} enfant${without > 1 ? 's' : ''} sans voiture ${d === 'aller' ? "à l'aller" : 'au retour'}`]
-      : []
+    if (without === 0) return []
+    const allFull = active.every((c) => c[passengersKey(d)].length >= threshold)
+    return [
+      `${without} enfant${without > 1 ? 's' : ''} sans voiture ${label}` +
+        (allFull ? ` — peut-être plus de place : ajouter un véhicule ?` : ''),
+    ]
   })
 
   if (rows.length === 0) {
@@ -88,6 +88,7 @@ export function CarMatrix({ event, participants, cars, editable, threshold, canR
       <div className="flex items-center gap-2 border-b border-slate-100 p-3">
         <Users className="h-4 w-4 text-primary" />
         <h2 className="text-sm font-semibold text-slate-600">Qui va dans quelle voiture</h2>
+        <HelpLink section="matrice" label="Qui va dans quelle voiture" />
       </div>
 
       {alerts.length > 0 ? (
@@ -162,9 +163,8 @@ export function CarMatrix({ event, participants, cars, editable, threshold, canR
                   const current = present ? carOf(p.childId, col.direction) : null
                   return [...col.cars, null].map((car) => {
                     const carId = car?.id ?? null
-                    const locked = !!car && car.driverChildIds.includes(p.childId)
                     const selected = current === carId
-                    const disabled = !editable || busy || !present || locked
+                    const disabled = !editable || busy || !present
                     return (
                       <td
                         key={`${col.direction}-${carId ?? 'none'}`}
@@ -195,7 +195,7 @@ export function CarMatrix({ event, participants, cars, editable, threshold, canR
                                   ? 'border-primary bg-primary'
                                   : 'border-danger bg-danger'
                                 : 'border-slate-300 bg-white hover:border-primary'
-                            } ${locked ? 'opacity-70' : ''}`}
+                            }`}
                           >
                             {selected && !carId ? (
                               <span className="text-xs font-bold text-white">!</span>
