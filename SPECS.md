@@ -17,7 +17,7 @@ Permet aux parents de coordonner les trajets (entraînements + matchs) de maniè
 |---|---|
 | Emails Brevo (5 templates), invitations par token, rappels J-1 | **Supprimés.** Calendrier partagé uniquement |
 | `needs` + `offers` + `rides` (3 collections, transactions) | **2 sous-collections par événement** : `participants` et `cars` |
-| Capacité voiture déclarée à l'offre, places bloquantes | **Plus de capacité.** Compteur d'enfants par voiture, **orange à partir de 5**, jamais bloquant |
+| Capacité voiture déclarée à l'offre, places bloquantes | **Places disponibles** par voiture (défaut 4, hors chauffeur, réglable 2–6) : guident le placement automatique, **jamais bloquantes** (un +1 forcé passe au rouge) |
 | 1 adresse par trajet choisie dans la liste | Adresse **par défaut / secondaire / saisie à la main**, choisie séparément pour l'aller et le retour |
 | Liaison parent ↔ enfant via invitation | **Liaison automatique par l'email du compte** (CSV → `parentEmails`) |
 | Vue liste besoins / voitures avec onglets Aller / Retour | **Vue matricielle unique** enfants × voitures, aller et retour côte à côte |
@@ -122,11 +122,15 @@ Une voiture par chauffeur par événement. **Document id = driverUid.**
   retour: boolean,                // "je ramène"
   passengersAller: string[],      // childIds — inclut driverChildIds si aller = true
   passengersRetour: string[],     // childIds
+  seats?: number,                 // places disponibles pour les enfants (hors chauffeur), 2..6 ; absent (voitures < 13/09/2026) → 4
+  meetAller?: TripAddress | null, // lieu de rendez-vous imposé par le chauffeur (null = chez chaque enfant)
+  meetRetour?: TripAddress | null,
+  note?: string,                  // commentaire du chauffeur → « 📝 Note de X : … » en fin d'invitation ICS
   createdAt?: Timestamp,          // ordre de déclaration (absent sur les voitures créées avant le 13/09/2026 → classées après)
   updatedAt: Timestamp
 }
 ```
-> Pas de capacité. Le nombre d'enfants = longueur de la liste. **Avertissement orange à partir de 5** (voiture 5 places = 1 adulte + 4 enfants), jamais bloquant.
+> Le nombre d'enfants = longueur de la liste ; `seats` guide le placement automatique et la couleur du total (**vert** = plein, **rouge** = un de trop, forcé à la main après confirmation). Jamais bloquant.
 
 ### Collection `config`
 ```typescript
@@ -148,7 +152,7 @@ Une voiture par chauffeur par événement. **Document id = driverUid.**
   icsLastSync?: Timestamp,
   calendarName: string,           // nom du calendrier ICS exporté
   calendarToken: string,          // secret dans l'URL d'abonnement (généré par l'admin)
-  carWarningThreshold: number,    // défaut 5
+  defaultSeats: number,           // places proposées à un chauffeur qui se déclare (défaut 4)
   updatedAt: Timestamp
 }
 ```
@@ -214,16 +218,18 @@ Sur la page événement, bloc **« Mes enfants »** — **une ligne compacte par
 - Cocher une direction inscrit l'enfant avec son adresse par défaut et **déplie** la ligne pour choisir l'adresse (défaut / secondaire / autre). Choisir une adresse **replie** la ligne. Le chevron ⌄ permet de rouvrir.
 - « Autre… » ouvre 3 champs (rue, CP, ville) — enregistrés **uniquement** dans le participant (`kind: 'custom'`), jamais sur la fiche enfant.
 - Sauvegarde immédiate à chaque changement (pas de bouton Valider) → `participants/{childId}`.
-- **Placement automatique** : une direction nouvellement cochée place l'enfant dans la **première voiture active (ordre de déclaration) ayant moins de `carWarningThreshold` enfants** ; si toutes sont pleines → « sans voiture » + alerte « peut-être plus de place : ajouter un véhicule ? ».
+- **Placement automatique** : une direction nouvellement cochée place l'enfant dans la **première voiture active (ordre de déclaration) ayant encore une place (`passengers < seats`)** ; si toutes sont pleines → « sans voiture » + alerte « plus de place : ajouter un véhicule ? ».
 - Décocher une direction retire automatiquement l'enfant de la voiture où il était pour cette direction.
 - Seuls les parents de l'enfant (ou l'admin) peuvent inscrire / désinscrire.
 
 ### 2.5 Déclaration d'une voiture (chauffeur)
 
-Bloc **« Ma voiture »** : deux interrupteurs **« J'emmène »** / **« Je ramène »**.
-- Activer une direction crée/maj `cars/{uid}` (avec `createdAt` = ordre de déclaration). Les enfants **déjà inscrits sans voiture** y montent automatiquement, par ordre d'inscription, jusqu'au seuil. L'enfant du chauffeur est inscrit (adresse par défaut) et placé dans sa voiture — **sauf** s'il est déjà placé dans une autre voiture : l'app demande alors, par direction, s'il y reste ou s'il monte avec son parent. L'enfant n'est **pas verrouillé** dans la voiture de son parent.
-- Désactiver une direction (ou les deux → suppression de la voiture) : ses passagers sont **rebasculés automatiquement** dans les autres voitures actives ayant de la place (ordre de déclaration, jusqu'au seuil), le reste passe « sans voiture » (alerte).
-- Aucune capacité demandée.
+Bloc **« Ma voiture »** : deux interrupteurs **« J'emmène »** / **« Je ramène »** + sélecteur **Places** (défaut `config.defaultSeats` = 4, choix 2–6 ; places pour les enfants, hors chauffeur — l'enfant du chauffeur en occupe une).
+- Activer une direction crée/maj `cars/{uid}` (avec `createdAt` = ordre de déclaration, `seats`). Les enfants **déjà inscrits sans voiture** y montent automatiquement, par ordre d'inscription, tant qu'il reste des places. L'enfant du chauffeur est inscrit (adresse par défaut) et placé dans sa voiture — **sauf** s'il est déjà placé dans une autre voiture : l'app demande alors, par direction, s'il y reste ou s'il monte avec son parent. L'enfant n'est **pas verrouillé** dans la voiture de son parent.
+- Désactiver une direction (ou les deux → suppression de la voiture) : ses passagers sont **rebasculés automatiquement** dans les autres voitures actives ayant de la place (ordre de déclaration), le reste passe « sans voiture » (alerte).
+- Changer les places : augmenter embarque les enfants en attente ; diminuer ne déplace personne (le total passe au rouge si dépassé).
+- Une fois déclaré, le chauffeur peut fixer un **lieu de rendez-vous** par direction (`meetAller` / `meetRetour`) : « chez chaque enfant » (défaut), une de ses adresses (celles de ses enfants : défaut / secondaire) ou une autre adresse saisie ; et un **commentaire** (`note`, 200 caractères, enregistré à la sortie du champ). Les deux vont dans le calendrier (2.7).
+- Admin (`/admin/event/:id`) : peut déclarer la voiture d'un parent à sa place (places comprises).
 - Seul le chauffeur (ou l'admin) crée/supprime sa voiture. Une seule voiture par chauffeur par événement.
 
 ### 2.6 Remplissage collaboratif — la matrice
@@ -246,7 +252,7 @@ Total             │    2    │     1     │     │    1    │    2     │
 - Une colonne par voiture et par direction + une colonne « Sans voiture ».
 - Cellule = bouton radio : cliquer met l'enfant dans cette voiture pour cette direction (et le retire de l'autre). Cliquer « Sans voiture » le sort de toute voiture. Les colonnes suivent l'ordre de déclaration des voitures.
 - Cellule grisée « ─ » si l'enfant n'est pas inscrit pour cette direction.
-- Ligne **Total** : nombre d'enfants par voiture, **orange si ≥ `carWarningThreshold`** (5).
+- Ligne **Total** : « n/places » par voiture — **vert** si plein (n = places), **rouge** si n > places (alerte « Voiture de X : 5 enfants pour 4 places »). Cliquer une voiture pleine demande confirmation avant de forcer le +1. Un 📍 dans l'en-tête signale un lieu de rendez-vous imposé (adresse au survol).
 - Bandeau d'alertes au-dessus : « ❗ 2 enfants sans voiture à l'aller », « ❗ Aucune voiture au retour ».
 - L'adresse du jour de chaque enfant est affichée sous son prénom (label, ex. « Chez Maman », ou l'adresse custom).
 - **Tout parent authentifié** peut remplir / déplacer **n'importe quel** enfant. Un chauffeur peut ainsi « prendre » les enfants sans voiture ; une nouvelle voiture peut reprendre tous les enfants d'une autre (action « Tout prendre » sur l'en-tête de colonne).
@@ -269,8 +275,8 @@ Inscrits (4) : Emma, Hugo, Léa, Lucas
 🚗 Jean
    • Lucas (12 rue de la Paix, Paris)
    • Emma (45 av. Gambetta, Paris)
-🚗 Sophie
-   • Léa (3 rue du Moulin, Paris)
+🚗 Sophie — RDV : 8 rue des Roses, Paris
+   • Léa
 ❗ Sans voiture :
    • Hugo (3 rue du Moulin, Paris)
 
@@ -279,9 +285,11 @@ RETOUR — départ 19:00
 🚗 Marc : Tom, Léa
 ✅ Tout le monde a une voiture
 
+📝 Note de Sophie : RDV 17h05 devant chez moi
+
 Mis à jour le 12/09 à 14:32 — https://myuberteamhand.web.app/event/xxx
 ```
-- Prénoms uniquement, adresses de prise en charge (voulues par l'équipe), **jamais** d'email. Une voiture sans passager pour une direction n'est pas mentionnée.
+- Prénoms uniquement, adresses de prise en charge (voulues par l'équipe), **jamais** d'email. Une voiture sans passager pour une direction n'est pas mentionnée. Si le chauffeur a fixé un lieu de rendez-vous (`meetAller` / `meetRetour`), la ligne de la voiture porte « RDV : adresse » (aller) ou « dépose : adresse » (retour) et les enfants sont listés sans adresse. Les commentaires (`note`) des chauffeurs actifs sont ajoutés en fin de description, un par ligne.
 - `Cache-Control: max-age=60`. Les clients calendrier se resynchronisent périodiquement (Google : quelques heures ; Apple : réglable).
 
 ### 2.8 Statistiques
@@ -314,7 +322,7 @@ Page accessible à tous — **vue saison uniquement**.
 - `/admin/evenements` — liste 4 semaines / saison, passés grisés, sync ICS, créer / modifier / annuler / `vacances` / réactiver. Suppression réservée aux `manual`. Titre → `/admin/event/:id`.
 - `/admin/event/:id` — même page que `/event/:id` en **mode admin** : Modifier l'événement, retirer une voiture **pour une direction** (✕ dans l'en-tête de colonne aller ou retour ; la voiture disparaît quand les deux sont retirées), **ajouter la voiture d'un parent** à sa place (liste des parents actifs sans voiture sur l'événement, aller / retour).
 - `/admin/familles` — liste, import CSV, fiche enfant (prénom, parents, adresses, actif) ; section **Comptes connectés** : activer / désactiver un parent (compte désactivé = écran bloquant + règles Firestore refusent ses écritures)
-- `/admin/config` — saison, 2 jours d'entraînement, URL ICS, nom + token du calendrier (bouton « Regénérer le lien »), seuil orange, bouton « Générer / Regénérer le calendrier »
+- `/admin/config` — saison, 2 jours d'entraînement, URL ICS, nom + token du calendrier (bouton « Regénérer le lien »), places par défaut, bouton « Générer / Regénérer le calendrier »
 
 ---
 
@@ -326,9 +334,9 @@ Page accessible à tous — **vue saison uniquement**.
 4. **Seul le chauffeur ajoute / retire sa voiture** (1 voiture par chauffeur par événement). L'admin peut tout faire.
 5. **Seul le parent inscrit / désinscrit son enfant** (présent / absent, adresse).
 6. **Tout le monde remplit** : n'importe quel parent authentifié place / déplace n'importe quel enfant dans n'importe quelle voiture.
-7. **Pas de limite de places** — compteur orange à partir de `carWarningThreshold` (5) enfants.
+7. **Places par voiture, jamais bloquantes** — `seats` (défaut 4, hors chauffeur) guide le placement automatique ; total vert si plein, rouge si forcé au-delà.
 8. **Gel après l'heure H** : `departureTime < now()` → tout est en lecture seule (UI + règles Firestore).
-9. **Placement automatique** : un enfant inscrit va dans la première voiture déclarée ayant de la place (< seuil) ; **retirer une voiture / une direction** rebascule ses passagers de la même façon, le reste passe « sans voiture ». **Désinscrire un enfant** → retiré de sa voiture.
+9. **Placement automatique** : un enfant inscrit va dans la première voiture déclarée ayant de la place (< `seats`) ; **retirer une voiture / une direction** rebascule ses passagers de la même façon, le reste passe « sans voiture ». **Désinscrire un enfant** → retiré de sa voiture.
 10. **L'appli fait foi** ; le calendrier ICS est un miroir en lecture seule.
 11. **Prénoms uniquement**, jamais de nom de famille, de téléphone ni d'email affiché.
 

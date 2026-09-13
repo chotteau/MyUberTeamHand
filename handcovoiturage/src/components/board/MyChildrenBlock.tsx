@@ -16,7 +16,6 @@ interface Props {
   cars: Car[]
   hasReturn: boolean
   editable: boolean
-  threshold: number
 }
 
 const DIR_LABEL: Record<Direction, string> = { aller: 'Aller', retour: 'Retour' }
@@ -40,7 +39,6 @@ export function MyChildrenBlock({
   cars,
   hasReturn,
   editable,
-  threshold,
 }: Props) {
   const [open, setOpen] = useState<Record<string, boolean>>({})
   const save = useMutation({
@@ -52,7 +50,6 @@ export function MyChildrenBlock({
         input,
         participants.find((p) => p.childId === child.id),
         cars,
-        threshold,
       ),
     onError: () => toast.error("Impossible d'enregistrer"),
   })

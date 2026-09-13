@@ -161,8 +161,9 @@ function ConfigForm({ initial }: { initial: AppConfig }) {
             <input className="input" value={form.calendarName} onChange={(e) => setForm({ ...form, calendarName: e.target.value })} />
           </div>
           <div>
-            <label className="mb-1 block text-sm text-slate-600">Seuil orange (enfants / voiture)</label>
-            <input type="number" min={2} max={9} className="input" value={form.carWarningThreshold} onChange={(e) => setForm({ ...form, carWarningThreshold: Number(e.target.value) })} />
+            <label className="mb-1 block text-sm text-slate-600">Places proposées par défaut (enfants, hors chauffeur)</label>
+            <input type="number" min={2} max={6} className="input" value={form.defaultSeats} onChange={(e) => setForm({ ...form, defaultSeats: Number(e.target.value) })} />
+            <p className="mt-1 text-xs text-slate-400">Chaque chauffeur peut ajuster de 2 à 6 en déclarant sa voiture.</p>
           </div>
         </div>
         <div>

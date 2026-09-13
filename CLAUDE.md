@@ -5,7 +5,7 @@
 Tu es le développeur principal de **HandCovoiturage**, une application web de gestion de covoiturage pour une équipe de handball jeunes.
 Lis intégralement `SPECS.md` (v2.0) avant toute action. Ce fichier est la référence absolue du projet.
 
-Principe directeur v2.0 : **le plus simple possible**. Pas d'email applicatif, pas de capacité voiture, pas de transactions complexes. Une matrice enfants × voitures, un calendrier partagé, c'est tout.
+Principe directeur v2.0 : **le plus simple possible**. Pas d'email applicatif, pas de transactions complexes. Une matrice enfants × voitures, un calendrier partagé, c'est tout.
 
 ---
 
@@ -102,9 +102,9 @@ handcovoiturage/
 4. **Seul le chauffeur ajoute/retire sa voiture** (1 par chauffeur par événement)
 5. **Seul le parent inscrit/désinscrit son enfant**
 6. **Tout le monde remplit** : n'importe quel parent place/déplace n'importe quel enfant
-7. **Pas de limite de places** — orange à partir de `config.carWarningThreshold` (5), jamais bloquant
+7. **Places par voiture** (`cars.seats`, 2..6, défaut `config.defaultSeats` = 4, hors chauffeur ; l'enfant du chauffeur compte) — le placement automatique s'arrête quand c'est plein ; un +1 forcé à la main est accepté après confirmation (total rouge). Jamais bloquant
 8. **Gel après l'heure H** — `isEventEditable(event)` = `departureTime > now()` et statut `scheduled`, vérifié côté UI **et** règles Firestore
-9. **Placement automatique** (`SeatingPlan` dans `services/board.ts`) : première voiture déclarée sous le seuil ; retirer une voiture rebascule ses passagers ; désinscrire un enfant le retire de sa voiture
+9. **Placement automatique** (`SeatingPlan` dans `services/board.ts`) : première voiture déclarée ayant une place ; retirer une voiture rebascule ses passagers ; désinscrire un enfant le retire de sa voiture ; augmenter `seats` embarque les enfants en attente
 10. **L'appli fait foi ; le calendrier est un miroir**
 11. **Prénoms uniquement** — jamais de nom de famille, téléphone ou email affiché
 
@@ -125,7 +125,7 @@ handcovoiturage/
 ```
 1. Vérifier token == config/app.calendarToken sinon 404
 2. Charger events de (now − 7 j) à seasonEnd + leurs participants et cars
-3. 1 VEVENT par événement ; DESCRIPTION = voitures aller / retour (une puce par enfant, adresse sans libellé, voitures vides omises) ; annulés → STATUS:CANCELLED
+3. 1 VEVENT par événement ; DESCRIPTION = voitures aller / retour (une puce par enfant, adresse sans libellé — ou « RDV : adresse » du chauffeur et prénoms seuls si `meetAller/meetRetour` ; voitures vides omises) ; puis « 📝 Note de X : … » par chauffeur ayant une `note` ; annulés → STATUS:CANCELLED
 4. Content-Type text/calendar ; Cache-Control max-age=300
 ```
 
@@ -171,8 +171,8 @@ npm run seed
 4. **Désinscrire les `onSnapshot`**
 5. **Dédupliquer les events ICS** via `icsUid` ; ne jamais réécrire `status` depuis la sync
 6. **date-fns toujours avec `fr`** ; dates construites en heure locale (Europe/Paris)
-7. **Ne pas stocker de compteurs** (total par voiture, enfants sans voiture) — dérivés des listes
-8. **Ne pas réintroduire d'email applicatif** ni de capacité voiture
+7. **Ne pas stocker de compteurs** (total par voiture, enfants sans voiture) — dérivés des listes ; `seats` absent → `DEFAULT_SEATS` (4)
+8. **Ne pas réintroduire d'email applicatif** ; les places (`seats`) ne bloquent jamais, elles guident le placement automatique
 
 ---
 

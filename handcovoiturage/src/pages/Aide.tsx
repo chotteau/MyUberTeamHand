@@ -81,10 +81,16 @@ export default function Aide() {
 
           <Step n={4} id="voiture" icon={<Car className="h-5 w-5" />} title="Proposer sa voiture">
             <p>
-              Bloc <b>Ma voiture</b> : <b>J'emmène</b> et/ou <b>Je ramène</b>. Votre enfant monte
-              avec vous — sauf s'il est déjà placé chez quelqu'un d'autre, auquel cas l'app vous
-              demande s'il y reste. Pas de nombre de places à saisir : l'app compte 5 enfants par
-              voiture et le total passe en orange à partir de 5.
+              Bloc <b>Ma voiture</b> : <b>J'emmène</b> et/ou <b>Je ramène</b>, et le nombre de{' '}
+              <b>places</b> disponibles pour les enfants (4 par défaut, réglable de 2 à 6 — sans
+              vous compter, votre enfant en occupe une). Votre enfant monte avec vous — sauf s'il est
+              déjà placé chez quelqu'un d'autre, auquel cas l'app vous demande s'il y reste.
+            </p>
+            <p>
+              Facultatif, une fois déclaré : un <b>lieu de rendez-vous</b> par direction (chez vous,
+              votre adresse secondaire ou une autre) si vous préférez que les enfants viennent à vous
+              plutôt que de passer les chercher, et un <b>commentaire</b> (« RDV 17h05 devant chez
+              moi »). Les deux apparaissent dans le calendrier partagé.
             </p>
             <Tip>
               Si vous retirez votre voiture, vos passagers sont automatiquement rebasculés dans les
@@ -103,14 +109,17 @@ export default function Aide() {
             </p>
             <p>
               <b>Vous n'avez normalement rien à faire</b> : dès qu'un enfant est inscrit, l'app le
-              place dans la première voiture déclarée qui a de la place (jusqu'à 5). Pour changer,
+              place dans la première voiture déclarée qui a encore une place. Pour changer,
               touchez le rond d'une autre colonne — <b>n'importe qui peut déplacer n'importe quel
               enfant</b>, c'est collaboratif. <b>Tout prendre</b> remplit une voiture d'un coup.
             </p>
             <p>
-              La colonne <b>Sans voiture</b> et le bandeau du haut montrent ce qui reste à
-              organiser ; « peut-être plus de place » signifie que toutes les voitures sont à 5 :
-              un chauffeur de plus est nécessaire.
+              La ligne <b>Total</b> affiche « 3/4 » (enfants / places) : <b>vert</b> quand la voiture
+              est pleine. On peut forcer un enfant de plus à la main (l'app demande confirmation) :
+              le total passe en <b>rouge</b> et le bandeau le signale. La colonne{' '}
+              <b>Sans voiture</b> et le bandeau montrent ce qui reste à organiser ; « plus de
+              place » signifie que toutes les voitures sont pleines : un chauffeur de plus est
+              nécessaire.
             </p>
             <Tip>
               Seul un parent inscrit ou désinscrit son enfant, seul un chauffeur ajoute ou retire sa
@@ -121,8 +130,9 @@ export default function Aide() {
           <Step n={6} id="calendrier" icon={<CalendarPlus className="h-5 w-5" />} title="Le calendrier partagé">
             <p>
               Dans <b>Profil</b>, bouton <b>S'abonner</b> : chaque entraînement apparaît dans votre
-              calendrier (iPhone, Google, Outlook) avec, dans les notes, qui emmène et ramène qui, et
-              à quelle adresse. Il se met à jour tout seul.
+              calendrier (iPhone, Google, Outlook) avec, dans les notes, qui emmène et ramène qui, à
+              quelle adresse (ou au lieu de rendez-vous fixé par le chauffeur), et les commentaires
+              des chauffeurs. Il se met à jour tout seul.
             </p>
             <Tip>
               L'application fait foi ; le calendrier est un miroir. Sur iPhone, régler

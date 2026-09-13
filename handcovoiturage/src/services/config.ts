@@ -33,7 +33,7 @@ export const DEFAULT_CONFIG: AppConfig = {
   icsUrl: 'https://competition-calendar.ffhandball.fr/c-29681/s-3309.ics',
   calendarName: 'HandCovoiturage',
   calendarToken: '',
-  carWarningThreshold: 5,
+  defaultSeats: 4,
 }
 
 /** Lit la configuration ; les champs absents prennent la valeur par défaut. */

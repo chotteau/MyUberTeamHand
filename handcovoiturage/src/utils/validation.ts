@@ -28,7 +28,7 @@ export const configFormSchema = z.object({
     .length(2, "Exactement 2 jours d'entraînement requis"),
   icsUrl: z.string().url('URL ICS invalide').or(z.literal('')),
   calendarName: z.string().min(1, 'Nom du calendrier requis'),
-  carWarningThreshold: z.coerce.number().int().min(2).max(9),
+  defaultSeats: z.coerce.number().int().min(2).max(6),
 })
 
 export const addressSchema = z.object({

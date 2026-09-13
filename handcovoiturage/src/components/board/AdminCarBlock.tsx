@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useMutation } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { CarFront, ShieldCheck } from 'lucide-react'
-import { setMyCar } from '../../services/board'
+import { MAX_SEATS, MIN_SEATS, clampSeats, setMyCar } from '../../services/board'
 import { useUsers } from '../../hooks/useUsers'
 import { useChildren } from '../../hooks/useChildren'
 import { Spinner } from '../ui/Spinner'
@@ -13,19 +13,20 @@ interface Props {
   cars: Car[]
   participants: Participant[]
   hasReturn: boolean
-  threshold: number
+  defaultSeats: number
 }
 
 /**
  * Mode admin : déclarer la voiture d'un parent à sa place (il a prévenu par
  * téléphone, pas de compte…). Même logique que « Ma voiture » pour ce parent.
  */
-export function AdminCarBlock({ eventId, cars, participants, hasReturn, threshold }: Props) {
+export function AdminCarBlock({ eventId, cars, participants, hasReturn, defaultSeats }: Props) {
   const { data: users } = useUsers()
   const { data: children } = useChildren()
   const [uid, setUid] = useState('')
   const [aller, setAller] = useState(true)
   const [retour, setRetour] = useState(hasReturn)
+  const [seats, setSeats] = useState(clampSeats(defaultSeats))
 
   const candidates = (users ?? []).filter(
     (u) => u.role === 'parent' && u.active && !cars.some((c) => c.id === u.uid),
@@ -39,12 +40,10 @@ export function AdminCarBlock({ eventId, cars, participants, hasReturn, threshol
       await setMyCar(
         eventId,
         { uid: u.uid, name: u.displayName || 'Chauffeur', children: kids },
-        aller,
-        retour,
+        { aller, retour, seats, meetAller: null, meetRetour: null, note: '' },
         undefined,
         participants,
         cars,
-        threshold,
       )
       return u.displayName
     },
@@ -84,6 +83,14 @@ export function AdminCarBlock({ eventId, cars, participants, hasReturn, threshol
             Retour
           </label>
         )}
+        <label className="flex items-center gap-1.5 text-sm">
+          Places
+          <select className="input !w-auto !py-1.5" value={seats} onChange={(e) => setSeats(Number(e.target.value))}>
+            {Array.from({ length: MAX_SEATS - MIN_SEATS + 1 }, (_, i) => MIN_SEATS + i).map((n) => (
+              <option key={n} value={n}>{n}</option>
+            ))}
+          </select>
+        </label>
         <button
           className="btn-secondary"
           disabled={!uid || (!aller && !retour) || add.isPending}
@@ -94,8 +101,8 @@ export function AdminCarBlock({ eventId, cars, participants, hasReturn, threshol
         </button>
       </div>
       <p className="text-xs text-slate-400">
-        Son enfant est inscrit et placé dans cette voiture ; les enfants sans voiture y sont
-        rebasculés à la prochaine inscription. Seuls les parents actifs sans voiture sur cet
+        Son enfant est inscrit et placé dans cette voiture, puis les enfants sans voiture y
+        montent tant qu'il reste des places. Seuls les parents actifs sans voiture sur cet
         événement sont proposés.
       </p>
     </section>

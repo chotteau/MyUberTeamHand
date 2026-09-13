@@ -19,7 +19,16 @@ const participantsCol = (eventId: string) =>
   collection(db, 'events', eventId, 'participants')
 const carsCol = (eventId: string) => collection(db, 'events', eventId, 'cars')
 
-export const DEFAULT_THRESHOLD = 5
+/** Places par défaut des voitures antérieures au 13/09/2026 (champ `seats` absent). */
+export const DEFAULT_SEATS = 4
+export const MIN_SEATS = 2
+export const MAX_SEATS = 6
+
+/** Places disponibles (enfants, hors chauffeur) d'une voiture. */
+export const seatsOf = (c: Car): number => c.seats ?? DEFAULT_SEATS
+
+/** Champ lieu de rendez-vous correspondant à une direction. */
+export const meetKey = (d: Direction) => (d === 'aller' ? ('meetAller' as const) : ('meetRetour' as const))
 
 /** Champ passagers correspondant à une direction. */
 export const passengersKey = (d: Direction) =>
@@ -89,14 +98,13 @@ export interface DirectionSummary {
   present: number
   cars: number
   withoutCar: number
-  /** Tous les véhicules actifs ont atteint le seuil et il reste des enfants sans voiture. */
+  /** Tous les véhicules actifs sont pleins et il reste des enfants sans voiture. */
   full: boolean
 }
 
 export function summarizeDirection(
   { participants, cars }: BoardSnapshot,
   direction: Direction,
-  threshold = DEFAULT_THRESHOLD,
 ): DirectionSummary {
   const key = passengersKey(direction)
   const activeCars = cars.filter((c) => c[direction])
@@ -107,7 +115,7 @@ export function summarizeDirection(
     present: present.length,
     cars: activeCars.length,
     withoutCar,
-    full: withoutCar > 0 && activeCars.length > 0 && activeCars.every((c) => c[key].length >= threshold),
+    full: withoutCar > 0 && activeCars.length > 0 && activeCars.every((c) => c[key].length >= seatsOf(c)),
   }
 }
 
@@ -119,11 +127,9 @@ export function summarizeDirection(
 class SeatingPlan {
   private seats = new Map<string, { passengersAller: string[]; passengersRetour: string[] }>()
   private readonly cars: Car[]
-  private readonly threshold: number
 
-  constructor(cars: Car[], threshold: number) {
+  constructor(cars: Car[]) {
     this.cars = cars
-    this.threshold = threshold
     for (const c of cars) {
       this.seats.set(c.id, {
         passengersAller: [...c.passengersAller],
@@ -163,11 +169,11 @@ class SeatingPlan {
 
   /**
    * Placement automatique : première voiture active (ordre de déclaration)
-   * sous le seuil. Retourne l'id de la voiture, ou null (« sans voiture »).
+   * ayant encore une place. Retourne l'id de la voiture, ou null (« sans voiture »).
    */
   autoSeat(childId: string, d: Direction, exclude?: string): string | null {
     this.unseat(childId, d)
-    const target = this.activeCars(d, exclude).find((c) => this.list(c.id, d).length < this.threshold)
+    const target = this.activeCars(d, exclude).find((c) => this.list(c.id, d).length < seatsOf(c))
     if (!target) return null
     this.seats.get(target.id)![passengersKey(d)].push(childId)
     return target.id
@@ -204,7 +210,7 @@ export interface ParticipationInput {
 
 /**
  * Inscrit / désinscrit un enfant.
- * - Direction nouvellement cochée → placement automatique (première voiture sous le seuil).
+ * - Direction nouvellement cochée → placement automatique (première voiture ayant une place).
  * - Direction décochée → retiré de sa voiture.
  */
 export async function setParticipation(
@@ -214,11 +220,10 @@ export async function setParticipation(
   input: ParticipationInput,
   current: Participant | undefined,
   cars: Car[],
-  threshold = DEFAULT_THRESHOLD,
 ): Promise<void> {
   const batch = writeBatch(db)
   const ref = doc(participantsCol(eventId), child.id)
-  const plan = new SeatingPlan(cars, threshold)
+  const plan = new SeatingPlan(cars)
 
   if (!input.aller && !input.retour) {
     batch.delete(ref)
@@ -257,25 +262,56 @@ export interface DriverInfo {
 /** Par direction : l'enfant du chauffeur reste / va dans une autre voiture (pas la sienne) ? */
 export type KeepElsewhere = Partial<Record<Direction, boolean>>
 
+/** Ce que le chauffeur déclare pour sa voiture. */
+export interface CarOptions {
+  aller: boolean
+  retour: boolean
+  /** Places disponibles pour les enfants (hors chauffeur), MIN_SEATS..MAX_SEATS. */
+  seats: number
+  /** Lieu de rendez-vous imposé (null = chez chaque enfant). */
+  meetAller: TripAddress | null
+  meetRetour: TripAddress | null
+  /** Commentaire pour le calendrier. */
+  note: string
+}
+
+export const clampSeats = (n: number) =>
+  Math.min(MAX_SEATS, Math.max(MIN_SEATS, Math.round(Number.isFinite(n) ? n : DEFAULT_SEATS)))
+
+/** Options courantes d'une voiture (pour un formulaire). */
+export function carOptionsOf(car: Car | undefined, defaultSeats: number): CarOptions {
+  return {
+    aller: car?.aller ?? false,
+    retour: car?.retour ?? false,
+    seats: car ? seatsOf(car) : clampSeats(defaultSeats),
+    meetAller: car?.meetAller ?? null,
+    meetRetour: car?.meetRetour ?? null,
+    note: car?.note ?? '',
+  }
+}
+
 /**
- * Déclare « j'emmène » / « je ramène ». Les deux à false → voiture supprimée.
- * - Direction activée : l'enfant du chauffeur est inscrit (adresse par défaut si
- *   absent) et placé dans sa voiture, sauf s'il est déjà dans une autre et que
- *   `keep[d]` est vrai.
+ * Déclare / met à jour « ma voiture ». Les deux directions à false → voiture supprimée.
+ * - Direction nouvellement activée : l'enfant du chauffeur est inscrit (adresse
+ *   par défaut si absent) et placé dans sa voiture, sauf s'il est déjà dans une
+ *   autre et que `keep[d]` est vrai.
  * - Direction désactivée : ses passagers sont rebasculés dans les autres
  *   voitures ayant de la place, le reste passe « sans voiture ».
+ * - Dans tous les cas, les enfants inscrits sans voiture montent tant qu'il
+ *   reste des places (ordre d'inscription) — donc aussi quand on augmente `seats`.
+ * - Changer le lieu de RDV, la note ou les places ne déplace personne d'autre.
  */
 export async function setMyCar(
   eventId: string,
   driver: DriverInfo,
-  aller: boolean,
-  retour: boolean,
+  options: CarOptions,
   existing: Car | undefined,
   participants: Participant[],
   allCars: Car[],
-  threshold = DEFAULT_THRESHOLD,
   keep: KeepElsewhere = {},
 ): Promise<void> {
+  const { aller, retour } = options
+  const seats = clampSeats(options.seats)
   const carRef = doc(carsCol(eventId), driver.uid)
   const childIds = driver.children.map((c) => c.id)
   const batch = writeBatch(db)
@@ -283,7 +319,7 @@ export async function setMyCar(
 
   // Voiture retirée : rebasculer ses passagers dans les autres voitures.
   if (!aller && !retour) {
-    const plan = new SeatingPlan(allCars, threshold)
+    const plan = new SeatingPlan(allCars)
     for (const d of ['aller', 'retour'] as Direction[]) {
       if (!existing?.[d]) continue
       for (const id of existing[passengersKey(d)]) plan.autoSeat(id, d, driver.uid)
@@ -306,15 +342,12 @@ export async function setMyCar(
     passengersRetour: [],
     updatedAt: undefined as unknown as Car['updatedAt'],
   }
-  const fullPlan = new SeatingPlan(
-    [...others, { ...mine, aller, retour }],
-    threshold,
-  )
+  const fullPlan = new SeatingPlan([...others, { ...mine, aller, retour, seats }])
   // Repartir de l'état courant des autres voitures.
   for (const d of ['aller', 'retour'] as Direction[]) {
     const active = d === 'aller' ? aller : retour
     const wasActive = existing?.[d] ?? false
-    if (active) {
+    if (active && !wasActive) {
       for (const cid of childIds) {
         const where = fullPlan.isSeated(cid, d)
         if (keep[d]) {
@@ -328,7 +361,7 @@ export async function setMyCar(
         }
         fullPlan.seat(cid, d, driver.uid)
       }
-    } else if (wasActive) {
+    } else if (!active && wasActive) {
       for (const id of existing?.[passengersKey(d)] ?? []) fullPlan.autoSeat(id, d, driver.uid)
       // La direction est désactivée : la liste de ma voiture est vidée.
       for (const id of fullPlan.list(driver.uid, d)) fullPlan.unseat(id, d)
@@ -336,7 +369,7 @@ export async function setMyCar(
   }
 
   // Enfants déjà inscrits et sans voiture : ils montent dans les voitures ayant
-  // de la place (ordre de déclaration), par ordre d'inscription, jusqu'au seuil.
+  // de la place (ordre de déclaration), par ordre d'inscription.
   const byRegistration = [...participants].sort(
     (a, b) => (a.updatedAt ? toDate(a.updatedAt).getTime() : 0) - (b.updatedAt ? toDate(b.updatedAt).getTime() : 0),
   )
@@ -356,6 +389,10 @@ export async function setMyCar(
     retour,
     passengersAller: aller ? finalMine.passengersAller : [],
     passengersRetour: retour ? finalMine.passengersRetour : [],
+    seats,
+    meetAller: aller ? options.meetAller : null,
+    meetRetour: retour ? options.meetRetour : null,
+    note: options.note.trim(),
     createdAt: existing?.createdAt ?? serverTimestamp(),
     updatedAt: serverTimestamp(),
   })
@@ -429,20 +466,20 @@ export async function removeCarDirection(
   carId: string,
   d: Direction,
   cars: Car[],
-  threshold = DEFAULT_THRESHOLD,
 ): Promise<void> {
   const car = cars.find((c) => c.id === carId)
   if (!car) return
   const other: Direction = d === 'aller' ? 'retour' : 'aller'
-  if (!car[other]) return removeCar(eventId, carId, cars, threshold)
+  if (!car[other]) return removeCar(eventId, carId, cars)
 
-  const plan = new SeatingPlan(cars, threshold)
+  const plan = new SeatingPlan(cars)
   for (const id of car[passengersKey(d)]) plan.autoSeat(id, d, carId)
   const batch = writeBatch(db)
   new SeatingPlanView(plan, cars.filter((c) => c.id !== carId)).apply(batch, eventId)
   batch.update(doc(carsCol(eventId), carId), {
     [d]: false,
     [passengersKey(d)]: [],
+    [meetKey(d)]: null,
     updatedAt: serverTimestamp(),
   })
   await batch.commit()
@@ -453,12 +490,11 @@ export async function removeCar(
   eventId: string,
   carId: string,
   cars: Car[],
-  threshold = DEFAULT_THRESHOLD,
 ): Promise<void> {
   const car = cars.find((c) => c.id === carId)
   const batch = writeBatch(db)
   if (car) {
-    const plan = new SeatingPlan(cars, threshold)
+    const plan = new SeatingPlan(cars)
     for (const d of ['aller', 'retour'] as Direction[]) {
       if (!car[d]) continue
       for (const id of car[passengersKey(d)]) plan.autoSeat(id, d, carId)
@@ -476,6 +512,7 @@ export async function removeCar(
 /**
  * Place un enfant dans une voiture (carId) ou dans aucune (null) pour une
  * direction. Un enfant est dans au plus une voiture par direction (règle 3).
+ * Pas de limite : un +1 forcé à la main est accepté (la case passe au rouge).
  */
 export async function assignChild(
   eventId: string,
@@ -484,7 +521,7 @@ export async function assignChild(
   carId: string | null,
   cars: Car[],
 ): Promise<void> {
-  const plan = new SeatingPlan(cars, Number.MAX_SAFE_INTEGER)
+  const plan = new SeatingPlan(cars)
   if (carId) plan.seat(childId, direction, carId)
   else plan.unseat(childId, direction)
   const batch = writeBatch(db)
@@ -503,7 +540,7 @@ export async function takeAll(
   participants: Participant[],
   cars: Car[],
 ): Promise<void> {
-  const plan = new SeatingPlan(cars, Number.MAX_SAFE_INTEGER)
+  const plan = new SeatingPlan(cars)
   for (const p of participants) if (p[direction]) plan.seat(p.childId, direction, carId)
   const batch = writeBatch(db)
   plan.apply(batch, eventId)
@@ -530,7 +567,7 @@ export async function purgeChildFromUpcomingEvents(childId: string): Promise<num
         (c) => c.passengersAller.includes(childId) || c.passengersRetour.includes(childId),
       )
       if (!pSnap.exists() && !seated) return 0
-      const plan = new SeatingPlan(cars, Number.MAX_SAFE_INTEGER)
+      const plan = new SeatingPlan(cars)
       plan.unseat(childId, 'aller')
       plan.unseat(childId, 'retour')
       const batch = writeBatch(db)

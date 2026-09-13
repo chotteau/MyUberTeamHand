@@ -45,7 +45,7 @@ export default function EventDetail({ adminMode = false }: { adminMode?: boolean
   }
 
   const admin = adminMode && isAdmin
-  const threshold = config?.carWarningThreshold ?? 5
+  const defaultSeats = config?.defaultSeats ?? 4
   const editable = isEventEditable(event)
   const past = isEventPast(event)
   const hasReturn = !!event.returnTime
@@ -135,7 +135,6 @@ export default function EventDetail({ adminMode = false }: { adminMode?: boolean
               cars={cars}
               hasReturn={hasReturn}
               editable={editable}
-              threshold={threshold}
             />
           )}
           {editable && activeChildren.length > 0 && (
@@ -148,7 +147,6 @@ export default function EventDetail({ adminMode = false }: { adminMode?: boolean
                 cars={cars}
                 hasReturn={hasReturn}
                 editable={editable}
-                threshold={threshold}
               />
               <MyCarBlock
                 eventId={event.id}
@@ -162,7 +160,7 @@ export default function EventDetail({ adminMode = false }: { adminMode?: boolean
                 participants={participants}
                 hasReturn={hasReturn}
                 editable={editable}
-                threshold={threshold}
+                defaultSeats={defaultSeats}
               />
             </div>
           )}
@@ -173,7 +171,7 @@ export default function EventDetail({ adminMode = false }: { adminMode?: boolean
               cars={cars}
               participants={participants}
               hasReturn={hasReturn}
-              threshold={threshold}
+              defaultSeats={defaultSeats}
             />
           )}
 
@@ -182,7 +180,6 @@ export default function EventDetail({ adminMode = false }: { adminMode?: boolean
             participants={participants}
             cars={cars}
             editable={editable}
-            threshold={threshold}
             canRemoveCar={admin}
           />
         </>

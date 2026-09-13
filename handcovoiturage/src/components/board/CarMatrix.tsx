@@ -1,10 +1,10 @@
 import { useMemo } from 'react'
 import { useMutation } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
-import { AlertTriangle, CheckCircle2, Users, X } from 'lucide-react'
-import { assignChild, carOf as carOfIn, orderCars, passengersKey, removeCarDirection, takeAll } from '../../services/board'
+import { AlertTriangle, CheckCircle2, MapPin, Users, X } from 'lucide-react'
+import { assignChild, carOf as carOfIn, meetKey, orderCars, passengersKey, removeCarDirection, seatsOf, takeAll } from '../../services/board'
 import { HelpLink } from '../ui/HelpLink'
-import { tripAddressLabel } from '../../utils/address'
+import { formatAddress, tripAddressLabel } from '../../utils/address'
 import { formatTime } from '../../utils/dates'
 import type { Car, Direction, Event, Participant } from '../../types'
 
@@ -13,7 +13,6 @@ interface Props {
   participants: Participant[]
   cars: Car[]
   editable: boolean
-  threshold: number
   /** Admin : peut retirer n'importe quelle voiture. */
   canRemoveCar?: boolean
 }
@@ -22,10 +21,11 @@ const DIR_LABEL: Record<Direction, string> = { aller: 'Aller', retour: 'Retour' 
 
 /**
  * Matrice enfants × voitures, aller et retour côte à côte.
- * Cellule = bouton radio ; colonne « — » = sans voiture ; ligne Total orange
- * à partir du seuil. Tout parent authentifié peut remplir (règle 6).
+ * Cellule = bouton radio ; colonne « — » = sans voiture ; ligne Total « n/places » :
+ * vert quand la voiture est pleine, rouge si on a forcé un enfant de plus.
+ * Tout parent authentifié peut remplir (règle 6).
  */
-export function CarMatrix({ event, participants, cars, editable, threshold, canRemoveCar }: Props) {
+export function CarMatrix({ event, participants, cars, editable, canRemoveCar }: Props) {
   const directions: Direction[] = event.returnTime ? ['aller', 'retour'] : ['aller']
 
   const rows = useMemo(
@@ -54,7 +54,7 @@ export function CarMatrix({ event, participants, cars, editable, threshold, canR
   })
   const remove = useMutation({
     mutationFn: (v: { carId: string; direction: Direction }) =>
-      removeCarDirection(event.id, v.carId, v.direction, cars, threshold),
+      removeCarDirection(event.id, v.carId, v.direction, cars),
     onError: () => toast.error('Échec'),
   })
   const busy = assign.isPending || grab.isPending || remove.isPending
@@ -67,14 +67,29 @@ export function CarMatrix({ event, participants, cars, editable, threshold, canR
     const label = d === 'aller' ? "à l'aller" : 'au retour'
     if (present.length === 0) return []
     if (active.length === 0) return [`Aucune voiture ${label}`]
+    const over = active
+      .filter((c) => c[passengersKey(d)].length > seatsOf(c))
+      .map((c) => `Voiture de ${c.driverName} ${label} : ${c[passengersKey(d)].length} enfants pour ${seatsOf(c)} places`)
     const without = present.filter((p) => !carOf(p.childId, d)).length
-    if (without === 0) return []
-    const allFull = active.every((c) => c[passengersKey(d)].length >= threshold)
+    if (without === 0) return over
+    const allFull = active.every((c) => c[passengersKey(d)].length >= seatsOf(c))
     return [
       `${without} enfant${without > 1 ? 's' : ''} sans voiture ${label}` +
-        (allFull ? ` — peut-être plus de place : ajouter un véhicule ?` : ''),
+        (allFull ? ` — plus de place : ajouter un véhicule ?` : ''),
+      ...over,
     ]
   })
+
+  /** Placer un enfant ; si la voiture est pleine, on demande avant de forcer. */
+  function place(childId: string, childName: string, direction: Direction, carId: string | null) {
+    const car = carId ? cars.find((c) => c.id === carId) : undefined
+    if (car) {
+      const n = car[passengersKey(direction)].length
+      const max = seatsOf(car)
+      if (n >= max && !confirm(`La voiture de ${car.driverName} est pleine (${n}/${max}).\n\nForcer quand même ${childName} dedans ?`)) return
+    }
+    assign.mutate({ childId, direction, carId })
+  }
 
   if (rows.length === 0) {
     return (
@@ -187,13 +202,7 @@ export function CarMatrix({ event, participants, cars, editable, threshold, canR
                               car ? `${p.childName} avec ${car.driverName}` : `${p.childName} sans voiture`
                             }
                             aria-pressed={selected}
-                            onClick={() =>
-                              assign.mutate({
-                                childId: p.childId,
-                                direction: col.direction,
-                                carId,
-                              })
-                            }
+                            onClick={() => place(p.childId, p.childName, col.direction, carId)}
                             className={`h-8 w-8 rounded-full border-2 transition disabled:cursor-not-allowed ${
                               selected
                                 ? carId
@@ -226,15 +235,26 @@ export function CarMatrix({ event, participants, cars, editable, threshold, canR
                 return [
                   ...col.cars.map((car) => {
                     const n = car[key].length
+                    const max = seatsOf(car)
+                    const tone =
+                      n > max
+                        ? 'bg-red-100 text-red-800'
+                        : n === max
+                          ? 'bg-green-100 text-green-800'
+                          : 'text-secondary'
                     return (
                       <td
                         key={`${col.direction}-${car.id}`}
-                        className={`border-l border-slate-100 p-2 text-center ${
-                          n >= threshold ? 'bg-amber-100 text-amber-800' : 'text-secondary'
-                        }`}
-                        title={n >= threshold ? `${n} enfants — voiture bien remplie` : undefined}
+                        className={`border-l border-slate-100 p-2 text-center ${tone}`}
+                        title={
+                          n > max
+                            ? `${n} enfants pour ${max} places — un de trop`
+                            : n === max
+                              ? 'Voiture pleine'
+                              : `${max - n} place${max - n > 1 ? 's' : ''} libre${max - n > 1 ? 's' : ''}`
+                        }
                       >
-                        {n}
+                        {n}/{max}
                       </td>
                     )
                   }),
@@ -277,9 +297,16 @@ function CarHeaders({
         <th
           key={`${direction}-${car.id}`}
           className="border-l border-slate-100 p-2 text-center font-medium"
+          title={car[meetKey(direction)] ? `Rendez-vous : ${formatAddress(car[meetKey(direction)]!)}` : undefined}
         >
           <div className="flex items-center justify-center gap-1">
             🚗 {car.driverName || 'Chauffeur'}
+            {car[meetKey(direction)] && (
+              <MapPin
+                className="h-3 w-3 text-primary"
+                aria-label={`Rendez-vous : ${formatAddress(car[meetKey(direction)]!)}`}
+              />
+            )}
             {canRemove && (
               <button
                 type="button"

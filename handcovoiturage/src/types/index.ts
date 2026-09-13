@@ -120,6 +120,13 @@ export interface Car {
   retour: boolean
   passengersAller: string[]
   passengersRetour: string[]
+  /** Places disponibles pour les enfants (hors chauffeur), 2..6. Absent sur les voitures antérieures au 13/09/2026 → DEFAULT_SEATS. */
+  seats?: number
+  /** Lieu de rendez-vous imposé par le chauffeur (null / absent = chez chaque enfant). */
+  meetAller?: TripAddress | null
+  meetRetour?: TripAddress | null
+  /** Commentaire libre du chauffeur, repris en fin d'invitation calendrier (« Note de X : … »). */
+  note?: string
   createdAt?: Timestamp // ordre de déclaration (absent sur les voitures antérieures au 13/09/2026)
   updatedAt: Timestamp
 }
@@ -133,5 +140,6 @@ export interface AppConfig {
   icsLastSync?: Timestamp
   calendarName: string
   calendarToken: string
-  carWarningThreshold: number
+  /** Places proposées par défaut à un chauffeur qui se déclare (hors chauffeur). */
+  defaultSeats: number
 }

@@ -24,6 +24,11 @@ interface Car {
   retour: boolean
   passengersAller: string[]
   passengersRetour: string[]
+  /** Lieu de rendez-vous imposé par le chauffeur (sinon chez chaque enfant). */
+  meetAller?: TripAddress | null
+  meetRetour?: TripAddress | null
+  /** Commentaire du chauffeur, repris en fin de description. */
+  note?: string
 }
 interface EventDoc {
   id: string
@@ -82,7 +87,8 @@ function addrText(a: TripAddress | null): string {
 /**
  * Bloc texte d'une direction :
  *   Inscrits (N) : prénoms
- *   🚗 Chauffeur : passagers (adresse)
+ *   🚗 Chauffeur                       → une puce par enfant avec son adresse
+ *   🚗 Chauffeur — RDV : adresse       → lieu imposé par le chauffeur, prénoms seuls
  *   ❗ Sans voiture : prénoms (adresse)   |   ✅ Tout le monde a une voiture
  */
 function directionBlock(
@@ -112,15 +118,18 @@ function directionBlock(
   const activeCars = cars.filter((c) => c[direction]).sort((a, b) => a.driverName.localeCompare(b.driverName))
   const seated = new Set<string>()
   for (const car of activeCars) {
+    const meet = direction === 'aller' ? car.meetAller : car.meetRetour
     const names = car[key]
       .map((id) => byId.get(id))
       .filter((p): p is Participant => !!p)
       .map((p) => {
         seated.add(p.childId)
-        return withAddr(p)
+        // Lieu imposé par le chauffeur : l'adresse de l'enfant ne compte plus.
+        return meet ? p.childName : withAddr(p)
       })
     if (names.length === 0) continue // voiture vide : non mentionnée
-    lines.push(`🚗 ${car.driverName || 'Chauffeur'}`)
+    const rdv = meet ? ` — ${direction === 'aller' ? 'RDV' : 'dépose'} : ${addrText(meet)}` : ''
+    lines.push(`🚗 ${car.driverName || 'Chauffeur'}${rdv}`)
     for (const n of names) lines.push(`   • ${n}`)
   }
 
@@ -199,6 +208,14 @@ export const calendarExport = onRequest({ region: 'europe-west1' }, async (req, 
               ? directionBlock('RETOUR', ev.returnTime, 'retour', participants, cars)
               : []),
           ]
+      // Commentaires des chauffeurs actifs, en fin d'invitation.
+      const notes = cancelled
+        ? []
+        : cars
+            .filter((c) => (c.aller || c.retour) && c.note?.trim())
+            .sort((a, b) => a.driverName.localeCompare(b.driverName))
+            .map((c) => `📝 Note de ${c.driverName || 'Chauffeur'} : ${c.note!.trim()}`)
+      if (notes.length) desc.push('', ...notes)
       desc.push('', `Mis à jour le ${fmtDateTime(Timestamp.fromDate(now))} — ${appUrl}/event/${ev.id}`)
 
       const loc = [ev.location?.name, ev.location?.address, ev.location?.city].filter(Boolean).join(', ')
