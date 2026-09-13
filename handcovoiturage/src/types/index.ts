@@ -106,6 +106,8 @@ export interface Participant {
   childName: string
   aller: TripAddress | null
   retour: TripAddress | null
+  /** Commentaire libre du parent (info globale, pas lié à une direction), repris en fin d'invitation ICS. */
+  note?: string
   updatedBy: string
   updatedAt: Timestamp
 }

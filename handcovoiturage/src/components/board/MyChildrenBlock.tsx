@@ -1,30 +1,43 @@
-import { useState } from 'react'
-import { useMutation } from '@tanstack/react-query'
-import toast from 'react-hot-toast'
-import { Baby, ChevronDown } from 'lucide-react'
-import { setParticipation, type ParticipationInput } from '../../services/board'
-import { formatAddress, tripAddressFromChild } from '../../utils/address'
-import { TripAddressPicker } from './TripAddressPicker'
-import { HelpLink } from '../ui/HelpLink'
-import type { Car, Child, Direction, Participant, TripAddress } from '../../types'
+import { useState } from "react";
+import { useMutation } from "@tanstack/react-query";
+import toast from "react-hot-toast";
+import { Baby, ChevronDown, MessageSquare } from "lucide-react";
+import {
+  setParticipation,
+  type ParticipationInput,
+} from "../../services/board";
+import { formatAddress, tripAddressFromChild } from "../../utils/address";
+import { TripAddressPicker } from "./TripAddressPicker";
+import { HelpLink } from "../ui/HelpLink";
+import { NoteField } from "./NoteField";
+import type {
+  Car,
+  Child,
+  Direction,
+  Participant,
+  TripAddress,
+} from "../../types";
 
 interface Props {
-  eventId: string
-  uid: string
-  children: Child[]
-  participants: Participant[]
-  cars: Car[]
-  hasReturn: boolean
-  editable: boolean
+  eventId: string;
+  uid: string;
+  children: Child[];
+  participants: Participant[];
+  cars: Car[];
+  hasReturn: boolean;
+  editable: boolean;
 }
 
-const DIR_LABEL: Record<Direction, string> = { aller: 'Aller', retour: 'Retour' }
+const DIR_LABEL: Record<Direction, string> = {
+  aller: "Aller",
+  retour: "Retour",
+};
 
 /** « (Domicile) », « (Chez Maman) », « (12 rue X, Clamart) » ou « (absent) ». */
 function placeLabel(a: TripAddress | null): string {
-  if (!a) return 'absent'
-  if (a.kind === 'custom') return formatAddress(a)
-  return a.label || formatAddress(a)
+  if (!a) return "absent";
+  if (a.kind === "custom") return formatAddress(a);
+  return a.label || formatAddress(a);
 }
 
 /**
@@ -40,9 +53,15 @@ export function MyChildrenBlock({
   hasReturn,
   editable,
 }: Props) {
-  const [open, setOpen] = useState<Record<string, boolean>>({})
+  const [open, setOpen] = useState<Record<string, boolean>>({});
   const save = useMutation({
-    mutationFn: ({ child, input }: { child: Child; input: ParticipationInput }) =>
+    mutationFn: ({
+      child,
+      input,
+    }: {
+      child: Child;
+      input: ParticipationInput;
+    }) =>
       setParticipation(
         eventId,
         child,
@@ -52,17 +71,17 @@ export function MyChildrenBlock({
         cars,
       ),
     onError: () => toast.error("Impossible d'enregistrer"),
-  })
+  });
 
   if (children.length === 0) {
     return (
       <section className="card text-sm text-amber-800 bg-amber-50 border-amber-200">
         Aucun enfant n'est associé à votre email. Contactez un administrateur.
       </section>
-    )
+    );
   }
 
-  const directions: Direction[] = hasReturn ? ['aller', 'retour'] : ['aller']
+  const directions: Direction[] = hasReturn ? ["aller", "retour"] : ["aller"];
 
   return (
     <section className="card space-y-3">
@@ -73,27 +92,37 @@ export function MyChildrenBlock({
       </h2>
 
       {children.map((child) => {
-        const p = participants.find((x) => x.childId === child.id)
-        const current: ParticipationInput = { aller: p?.aller ?? null, retour: p?.retour ?? null }
-        const isOpen = !!open[child.id]
-        const disabled = !editable || save.isPending
-        const anyPresent = directions.some((d) => !!current[d])
+        const p = participants.find((x) => x.childId === child.id);
+        const current: ParticipationInput = {
+          aller: p?.aller ?? null,
+          retour: p?.retour ?? null,
+          note: p?.note ?? "",
+        };
+        const isOpen = !!open[child.id];
+        const disabled = !editable || save.isPending;
+        const anyPresent = directions.some((d) => !!current[d]);
 
-        const update = (patch: Partial<ParticipationInput>, openAfter?: boolean) => {
-          save.mutate({ child, input: { ...current, ...patch } })
-          if (openAfter !== undefined) setOpen((o) => ({ ...o, [child.id]: openAfter }))
-        }
+        const update = (
+          patch: Partial<ParticipationInput>,
+          openAfter?: boolean,
+        ) => {
+          save.mutate({ child, input: { ...current, ...patch } });
+          if (openAfter !== undefined)
+            setOpen((o) => ({ ...o, [child.id]: openAfter }));
+        };
 
         return (
           <div key={child.id} className="rounded-xl border border-slate-200">
             {/* Ligne compacte */}
             <div className="flex flex-wrap items-center gap-x-4 gap-y-1 p-3">
-              <span className="font-medium text-secondary">{child.firstName}</span>
+              <span className="font-medium text-secondary">
+                {child.firstName}
+              </span>
               {directions.map((d) => (
                 <label
                   key={d}
                   className={`flex cursor-pointer items-center gap-1.5 text-sm ${
-                    current[d] ? 'text-secondary' : 'text-slate-400'
+                    current[d] ? "text-secondary" : "text-slate-400"
                   }`}
                 >
                   <input
@@ -104,10 +133,15 @@ export function MyChildrenBlock({
                     onChange={(e) => {
                       if (e.target.checked) {
                         // Cocher : adresse par défaut, puis déplier pour la confirmer / changer.
-                        update({ [d]: tripAddressFromChild(child, 'default') }, true)
+                        update(
+                          { [d]: tripAddressFromChild(child, "default") },
+                          true,
+                        );
                       } else {
-                        const rest = directions.filter((x) => x !== d).some((x) => !!current[x])
-                        update({ [d]: null }, rest ? undefined : false)
+                        const rest = directions
+                          .filter((x) => x !== d)
+                          .some((x) => !!current[x]);
+                        update({ [d]: null }, rest ? undefined : false);
                       }
                     }}
                   />
@@ -115,42 +149,64 @@ export function MyChildrenBlock({
                   <span className="text-xs">({placeLabel(current[d])})</span>
                 </label>
               ))}
+              {anyPresent && current.note && (
+                <MessageSquare
+                  className="h-3.5 w-3.5 text-slate-400"
+                  aria-label={`Commentaire : ${current.note}`}
+                />
+              )}
               {anyPresent && (
                 <button
                   type="button"
-                  onClick={() => setOpen((o) => ({ ...o, [child.id]: !isOpen }))}
+                  onClick={() =>
+                    setOpen((o) => ({ ...o, [child.id]: !isOpen }))
+                  }
                   className="ml-auto rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-secondary"
-                  aria-label={isOpen ? 'Replier' : "Changer l'adresse"}
-                  title={isOpen ? 'Replier' : "Changer l'adresse"}
+                  aria-label={isOpen ? "Replier" : "Changer l'adresse"}
+                  title={isOpen ? "Replier" : "Changer l'adresse"}
                 >
-                  <ChevronDown className={`h-4 w-4 transition ${isOpen ? 'rotate-180' : ''}`} />
+                  <ChevronDown
+                    className={`h-4 w-4 transition ${isOpen ? "rotate-180" : ""}`}
+                  />
                 </button>
               )}
             </div>
 
-            {/* Choix des adresses (déplié) */}
+            {/* Choix des adresses + commentaire (déplié) */}
             {isOpen && anyPresent && (
-              <div className={`grid gap-3 border-t border-slate-100 p-3 ${hasReturn ? 'sm:grid-cols-2' : ''}`}>
-                {directions.map((d) =>
-                  current[d] ? (
-                    <div key={d} className="rounded-lg bg-slate-50 p-2.5">
-                      <div className="mb-2 text-xs font-semibold uppercase text-slate-400">
-                        {DIR_LABEL[d]} — lieu de {d === 'aller' ? 'prise en charge' : 'dépose'}
+              <div className="space-y-3 border-t border-slate-100 p-3">
+                <div
+                  className={`grid gap-3 ${hasReturn ? "sm:grid-cols-2" : ""}`}
+                >
+                  {directions.map((d) =>
+                    current[d] ? (
+                      <div key={d} className="rounded-lg bg-slate-50 p-2.5">
+                        <div className="mb-2 text-xs font-semibold uppercase text-slate-400">
+                          {DIR_LABEL[d]} — lieu de{" "}
+                          {d === "aller" ? "prise en charge" : "dépose"}
+                        </div>
+                        <TripAddressPicker
+                          child={child}
+                          value={current[d]!}
+                          disabled={disabled}
+                          onChange={(v) => update({ [d]: v }, false)}
+                        />
                       </div>
-                      <TripAddressPicker
-                        child={child}
-                        value={current[d]!}
-                        disabled={disabled}
-                        onChange={(v) => update({ [d]: v }, false)}
-                      />
-                    </div>
-                  ) : null,
-                )}
+                    ) : null,
+                  )}
+                </div>
+                <NoteField
+                  key={current.note}
+                  value={current.note ?? ""}
+                  disabled={disabled}
+                  placeholder={`Commentaire pour ${child.firstName} (ex. a son sac de sport avec lui)`}
+                  onSave={(note) => update({ note })}
+                />
               </div>
             )}
           </div>
-        )
+        );
       })}
     </section>
-  )
+  );
 }

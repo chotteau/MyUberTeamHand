@@ -171,10 +171,10 @@ export function CarMatrix({ event, participants, cars, editable, canRemoveCar }:
               <tr key={p.childId} className="border-t border-slate-100">
                 <td
                   className="sticky left-0 z-10 bg-white p-2 align-middle font-medium text-secondary"
-                  title={directions
-                    .filter((d) => p[d])
-                    .map((d) => `${DIR_LABEL[d]} : ${tripAddressLabel(p[d])}`)
-                    .join(' · ')}
+                  title={[
+                    ...directions.filter((d) => p[d]).map((d) => `${DIR_LABEL[d]} : ${tripAddressLabel(p[d])}`),
+                    ...(p.note ? [`Commentaire : ${p.note}`] : []),
+                  ].join(' · ')}
                 >
                   {p.childName}
                 </td>

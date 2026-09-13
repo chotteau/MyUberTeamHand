@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useMutation } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
-import { Car as CarIcon, MapPin, MessageSquare } from 'lucide-react'
+import { Car as CarIcon, MapPin } from 'lucide-react'
 import {
   MAX_SEATS,
   MIN_SEATS,
@@ -17,6 +17,7 @@ import {
 } from '../../services/board'
 import { formatAddress } from '../../utils/address'
 import { HelpLink } from '../ui/HelpLink'
+import { NoteField } from './NoteField'
 import type { Address, Car, Direction, Participant, TripAddress } from '../../types'
 
 interface Props {
@@ -147,7 +148,13 @@ export function MyCarBlock({
                 onChange={(v) => update(d === 'aller' ? { meetAller: v } : { meetRetour: v })}
               />
             ))}
-          <NoteField key={opts.note} value={opts.note} disabled={disabled} onSave={(note) => update({ note })} />
+          <NoteField
+            key={opts.note}
+            value={opts.note}
+            disabled={disabled}
+            placeholder="Commentaire pour le calendrier (ex. RDV 17h05 devant chez moi)"
+            onSave={(note) => update({ note })}
+          />
         </div>
       )}
 
@@ -284,39 +291,6 @@ function MeetingPointField({
         </div>
       )}
     </div>
-  )
-}
-
-/** Commentaire libre, enregistré à la sortie du champ (ou Entrée). */
-function NoteField({
-  value,
-  disabled,
-  onSave,
-}: {
-  value: string
-  disabled: boolean
-  onSave: (note: string) => void
-}) {
-  const [draft, setDraft] = useState(value)
-  const commit = () => {
-    if (draft.trim() !== value) onSave(draft.trim())
-  }
-  return (
-    <label className="flex items-center gap-1.5 text-sm">
-      <MessageSquare className="h-3.5 w-3.5 shrink-0 text-slate-400" />
-      <input
-        className="input !py-1 text-xs"
-        placeholder="Commentaire pour le calendrier (ex. RDV 17h05 devant chez moi)"
-        disabled={disabled}
-        value={draft}
-        maxLength={200}
-        onChange={(e) => setDraft(e.target.value)}
-        onBlur={commit}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
-        }}
-      />
-    </label>
   )
 }
 

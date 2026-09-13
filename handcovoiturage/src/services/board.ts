@@ -206,6 +206,8 @@ class SeatingPlan {
 export interface ParticipationInput {
   aller: TripAddress | null
   retour: TripAddress | null
+  /** Commentaire pour le calendrier (absent → conservé tel quel). */
+  note?: string
 }
 
 /**
@@ -233,6 +235,7 @@ export async function setParticipation(
       childName: child.firstName,
       aller: input.aller,
       retour: input.retour,
+      note: (input.note ?? current?.note ?? '').trim(),
       updatedBy: uid,
       updatedAt: serverTimestamp(),
     })
@@ -410,6 +413,7 @@ export async function setMyCar(
       childId: child.id,
       childName: child.firstName,
       ...next,
+      note: cur?.note ?? '',
       updatedBy: driver.uid,
       updatedAt: serverTimestamp(),
     })

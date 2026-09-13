@@ -97,6 +97,7 @@ Un document par enfant inscrit à l'événement. **Document id = childId.**
   childName: string,              // snapshot du prénom (affichage sans lecture de children)
   aller: TripAddress | null,      // null = l'enfant ne vient pas à l'aller
   retour: TripAddress | null,     // null = l'enfant ne rentre pas au retour
+  note?: string,                  // commentaire du parent (info globale) → « 📝 Note pour X : … » en fin d'invitation ICS
   updatedBy: string,              // uid
   updatedAt: Timestamp
 }
@@ -217,6 +218,7 @@ Sur la page événement, bloc **« Mes enfants »** — **une ligne compacte par
 - Case à cocher par direction ; entre parenthèses, le **lieu** de prise en charge / dépose (libellé de l'adresse, ou l'adresse saisie), « absent » si non coché.
 - Cocher une direction inscrit l'enfant avec son adresse par défaut et **déplie** la ligne pour choisir l'adresse (défaut / secondaire / autre). Choisir une adresse **replie** la ligne. Le chevron ⌄ permet de rouvrir.
 - « Autre… » ouvre 3 champs (rue, CP, ville) — enregistrés **uniquement** dans le participant (`kind: 'custom'`), jamais sur la fiche enfant.
+- Sous les adresses, un **commentaire** par enfant (`participants.note`, 200 caractères, global — pas lié à une direction, enregistré à la sortie du champ) : repris en fin d'invitation ICS « 📝 Note pour Achille : … ». Une icône 💬 sur la ligne compacte signale qu'il y en a un.
 - Sauvegarde immédiate à chaque changement (pas de bouton Valider) → `participants/{childId}`.
 - **Placement automatique** : une direction nouvellement cochée place l'enfant dans la **première voiture active (ordre de déclaration) ayant encore une place (`passengers < seats`)** ; si toutes sont pleines → « sans voiture » + alerte « plus de place : ajouter un véhicule ? ».
 - Décocher une direction retire automatiquement l'enfant de la voiture où il était pour cette direction.
@@ -286,10 +288,11 @@ RETOUR — départ 19:00
 ✅ Tout le monde a une voiture
 
 📝 Note de Sophie : RDV 17h05 devant chez moi
+📝 Note pour Léa : a son sac de sport avec elle
 
 Mis à jour le 12/09 à 14:32 — https://myuberteamhand.web.app/event/xxx
 ```
-- Prénoms uniquement, adresses de prise en charge (voulues par l'équipe), **jamais** d'email. Une voiture sans passager pour une direction n'est pas mentionnée. Si le chauffeur a fixé un lieu de rendez-vous (`meetAller` / `meetRetour`), la ligne de la voiture porte « RDV : adresse » (aller) ou « dépose : adresse » (retour) et les enfants sont listés sans adresse. Les commentaires (`note`) des chauffeurs actifs sont ajoutés en fin de description, un par ligne.
+- Prénoms uniquement, adresses de prise en charge (voulues par l'équipe), **jamais** d'email. Une voiture sans passager pour une direction n'est pas mentionnée. Si le chauffeur a fixé un lieu de rendez-vous (`meetAller` / `meetRetour`), la ligne de la voiture porte « RDV : adresse » (aller) ou « dépose : adresse » (retour) et les enfants sont listés sans adresse. Les commentaires (`note`) des chauffeurs actifs puis des enfants inscrits sont ajoutés en fin de description, un par ligne.
 - `Cache-Control: max-age=60`. Les clients calendrier se resynchronisent périodiquement (Google : quelques heures ; Apple : réglable).
 
 ### 2.8 Statistiques

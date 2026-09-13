@@ -17,6 +17,8 @@ interface Participant {
   childName: string
   aller: TripAddress | null
   retour: TripAddress | null
+  /** Commentaire du parent, repris en fin de description. */
+  note?: string
 }
 interface Car {
   driverName: string
@@ -208,13 +210,19 @@ export const calendarExport = onRequest({ region: 'europe-west1' }, async (req, 
               ? directionBlock('RETOUR', ev.returnTime, 'retour', participants, cars)
               : []),
           ]
-      // Commentaires des chauffeurs actifs, en fin d'invitation.
+      // Commentaires en fin d'invitation : chauffeurs actifs, puis enfants inscrits.
       const notes = cancelled
         ? []
-        : cars
-            .filter((c) => (c.aller || c.retour) && c.note?.trim())
-            .sort((a, b) => a.driverName.localeCompare(b.driverName))
-            .map((c) => `📝 Note de ${c.driverName || 'Chauffeur'} : ${c.note!.trim()}`)
+        : [
+            ...cars
+              .filter((c) => (c.aller || c.retour) && c.note?.trim())
+              .sort((a, b) => a.driverName.localeCompare(b.driverName))
+              .map((c) => `📝 Note de ${c.driverName || 'Chauffeur'} : ${c.note!.trim()}`),
+            ...participants
+              .filter((p) => (p.aller || p.retour) && p.note?.trim())
+              .sort((a, b) => a.childName.localeCompare(b.childName))
+              .map((p) => `📝 Note pour ${p.childName} : ${p.note!.trim()}`),
+          ]
       if (notes.length) desc.push('', ...notes)
       desc.push('', `Mis à jour le ${fmtDateTime(Timestamp.fromDate(now))} — ${appUrl}/event/${ev.id}`)
 

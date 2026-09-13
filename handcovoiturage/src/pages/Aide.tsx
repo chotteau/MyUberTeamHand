@@ -77,6 +77,10 @@ export default function Aide() {
               dépose. Pour une adresse exceptionnelle, <b>Autre adresse…</b>. C'est enregistré
               immédiatement.
             </p>
+            <p>
+              Sous les adresses, un <b>commentaire</b> pour l'enfant si besoin (« a son sac de sport
+              avec lui ») : il apparaît dans le calendrier partagé.
+            </p>
           </Step>
 
           <Step n={4} id="voiture" icon={<Car className="h-5 w-5" />} title="Proposer sa voiture">
@@ -132,7 +136,7 @@ export default function Aide() {
               Dans <b>Profil</b>, bouton <b>S'abonner</b> : chaque entraînement apparaît dans votre
               calendrier (iPhone, Google, Outlook) avec, dans les notes, qui emmène et ramène qui, à
               quelle adresse (ou au lieu de rendez-vous fixé par le chauffeur), et les commentaires
-              des chauffeurs. Il se met à jour tout seul.
+              des chauffeurs et des parents. Il se met à jour tout seul.
             </p>
             <Tip>
               L'application fait foi ; le calendrier est un miroir. Sur iPhone, régler

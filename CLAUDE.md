@@ -125,7 +125,7 @@ handcovoiturage/
 ```
 1. Vérifier token == config/app.calendarToken sinon 404
 2. Charger events de (now − 7 j) à seasonEnd + leurs participants et cars
-3. 1 VEVENT par événement ; DESCRIPTION = voitures aller / retour (une puce par enfant, adresse sans libellé — ou « RDV : adresse » du chauffeur et prénoms seuls si `meetAller/meetRetour` ; voitures vides omises) ; puis « 📝 Note de X : … » par chauffeur ayant une `note` ; annulés → STATUS:CANCELLED
+3. 1 VEVENT par événement ; DESCRIPTION = voitures aller / retour (une puce par enfant, adresse sans libellé — ou « RDV : adresse » du chauffeur et prénoms seuls si `meetAller/meetRetour` ; voitures vides omises) ; puis « 📝 Note de X : … » par chauffeur ayant une `note` et « 📝 Note pour Enfant : … » par participant ayant une `note` ; annulés → STATUS:CANCELLED
 4. Content-Type text/calendar ; Cache-Control max-age=300
 ```
 
