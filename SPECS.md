@@ -222,7 +222,7 @@ Sur la page événement, bloc **« Mes enfants »** — un sous-bloc par enfant 
 ### 2.5 Déclaration d'une voiture (chauffeur)
 
 Bloc **« Ma voiture »** : deux interrupteurs **« J'emmène »** / **« Je ramène »**.
-- Activer une direction crée/maj `cars/{uid}` (avec `createdAt` = ordre de déclaration). L'enfant du chauffeur est inscrit (adresse par défaut) et placé dans sa voiture — **sauf** s'il est déjà placé dans une autre voiture : l'app demande alors, par direction, s'il y reste ou s'il monte avec son parent. L'enfant n'est **pas verrouillé** dans la voiture de son parent.
+- Activer une direction crée/maj `cars/{uid}` (avec `createdAt` = ordre de déclaration). Les enfants **déjà inscrits sans voiture** y montent automatiquement, par ordre d'inscription, jusqu'au seuil. L'enfant du chauffeur est inscrit (adresse par défaut) et placé dans sa voiture — **sauf** s'il est déjà placé dans une autre voiture : l'app demande alors, par direction, s'il y reste ou s'il monte avec son parent. L'enfant n'est **pas verrouillé** dans la voiture de son parent.
 - Désactiver une direction (ou les deux → suppression de la voiture) : ses passagers sont **rebasculés automatiquement** dans les autres voitures actives ayant de la place (ordre de déclaration, jusqu'au seuil), le reste passe « sans voiture » (alerte).
 - Aucune capacité demandée.
 - Seul le chauffeur (ou l'admin) crée/supprime sa voiture. Une seule voiture par chauffeur par événement.

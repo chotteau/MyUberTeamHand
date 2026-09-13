@@ -335,6 +335,18 @@ export async function setMyCar(
     }
   }
 
+  // Enfants déjà inscrits et sans voiture : ils montent dans les voitures ayant
+  // de la place (ordre de déclaration), par ordre d'inscription, jusqu'au seuil.
+  const byRegistration = [...participants].sort(
+    (a, b) => (a.updatedAt ? toDate(a.updatedAt).getTime() : 0) - (b.updatedAt ? toDate(b.updatedAt).getTime() : 0),
+  )
+  for (const d of ['aller', 'retour'] as Direction[]) {
+    if (!(d === 'aller' ? aller : retour)) continue
+    for (const p of byRegistration) {
+      if (p[d] && !fullPlan.isSeated(p.childId, d)) fullPlan.autoSeat(p.childId, d)
+    }
+  }
+
   const finalMine = fullPlan.finalOf(driver.uid)
   batch.set(carRef, {
     driverUid: driver.uid,
