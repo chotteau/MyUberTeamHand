@@ -206,13 +206,12 @@ prenom_enfant;prenom_parent1;email_parent1;adresse1_rue;adresse1_cp;adresse1_vil
 
 ### 2.4 Inscription d'un enfant (parent)
 
-Sur la page événement, bloc **« Mes enfants »** — un sous-bloc par enfant :
+Sur la page événement, bloc **« Mes enfants »** — **une ligne compacte par enfant** :
 
-| | Aller | Retour |
-|---|---|---|
-| Présent ? | ☐ | ☐ |
-| Adresse | ◉ Défaut (Chez Papa) ○ Secondaire (Chez Maman) ○ Autre… | ◉ Défaut ○ Secondaire ○ Autre… |
+`Achille   ☑ Aller (Domicile)   ☑ Retour (Chez Maman)   ⌄`
 
+- Case à cocher par direction ; entre parenthèses, le **lieu** de prise en charge / dépose (libellé de l'adresse, ou l'adresse saisie), « absent » si non coché.
+- Cocher une direction inscrit l'enfant avec son adresse par défaut et **déplie** la ligne pour choisir l'adresse (défaut / secondaire / autre). Choisir une adresse **replie** la ligne. Le chevron ⌄ permet de rouvrir.
 - « Autre… » ouvre 3 champs (rue, CP, ville) — enregistrés **uniquement** dans le participant (`kind: 'custom'`), jamais sur la fiche enfant.
 - Sauvegarde immédiate à chaque changement (pas de bouton Valider) → `participants/{childId}`.
 - **Placement automatique** : une direction nouvellement cochée place l'enfant dans la **première voiture active (ordre de déclaration) ayant moins de `carWarningThreshold` enfants** ; si toutes sont pleines → « sans voiture » + alerte « peut-être plus de place : ajouter un véhicule ? ».

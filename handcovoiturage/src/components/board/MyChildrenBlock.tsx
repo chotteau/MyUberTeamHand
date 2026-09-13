@@ -1,8 +1,9 @@
+import { useState } from 'react'
 import { useMutation } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
-import { Baby } from 'lucide-react'
+import { Baby, ChevronDown } from 'lucide-react'
 import { setParticipation, type ParticipationInput } from '../../services/board'
-import { tripAddressFromChild } from '../../utils/address'
+import { formatAddress, tripAddressFromChild } from '../../utils/address'
 import { TripAddressPicker } from './TripAddressPicker'
 import { HelpLink } from '../ui/HelpLink'
 import type { Car, Child, Direction, Participant, TripAddress } from '../../types'
@@ -18,7 +19,19 @@ interface Props {
   threshold: number
 }
 
-/** Bloc « Mes enfants » : présent aller / retour + adresse par direction. */
+const DIR_LABEL: Record<Direction, string> = { aller: 'Aller', retour: 'Retour' }
+
+/** « (Domicile) », « (Chez Maman) », « (12 rue X, Clamart) » ou « (absent) ». */
+function placeLabel(a: TripAddress | null): string {
+  if (!a) return 'absent'
+  if (a.kind === 'custom') return formatAddress(a)
+  return a.label || formatAddress(a)
+}
+
+/**
+ * Bloc « Mes enfants » : une ligne compacte par enfant (présence aller / retour
+ * avec le lieu entre parenthèses), dépliable pour choisir l'adresse.
+ */
 export function MyChildrenBlock({
   eventId,
   uid,
@@ -29,6 +42,7 @@ export function MyChildrenBlock({
   editable,
   threshold,
 }: Props) {
+  const [open, setOpen] = useState<Record<string, boolean>>({})
   const save = useMutation({
     mutationFn: ({ child, input }: { child: Child; input: ParticipationInput }) =>
       setParticipation(
@@ -51,8 +65,10 @@ export function MyChildrenBlock({
     )
   }
 
+  const directions: Direction[] = hasReturn ? ['aller', 'retour'] : ['aller']
+
   return (
-    <section className="card space-y-4">
+    <section className="card space-y-3">
       <h2 className="flex items-center gap-2 text-sm font-semibold text-slate-600">
         <Baby className="h-4 w-4 text-primary" />
         Mes enfants
@@ -61,85 +77,83 @@ export function MyChildrenBlock({
 
       {children.map((child) => {
         const p = participants.find((x) => x.childId === child.id)
-        const current: ParticipationInput = {
-          aller: p?.aller ?? null,
-          retour: p?.retour ?? null,
-        }
-        const update = (patch: Partial<ParticipationInput>) =>
+        const current: ParticipationInput = { aller: p?.aller ?? null, retour: p?.retour ?? null }
+        const isOpen = !!open[child.id]
+        const disabled = !editable || save.isPending
+        const anyPresent = directions.some((d) => !!current[d])
+
+        const update = (patch: Partial<ParticipationInput>, openAfter?: boolean) => {
           save.mutate({ child, input: { ...current, ...patch } })
+          if (openAfter !== undefined) setOpen((o) => ({ ...o, [child.id]: openAfter }))
+        }
 
         return (
-          <div key={child.id} className="rounded-xl border border-slate-200 p-3">
-            <div className="mb-2 font-medium text-secondary">{child.firstName}</div>
-            <div className={`grid gap-3 ${hasReturn ? 'sm:grid-cols-2' : ''}`}>
-              <DirectionCell
-                label="Aller"
-                direction="aller"
-                child={child}
-                value={current.aller}
-                disabled={!editable || save.isPending}
-                onChange={(v) => update({ aller: v })}
-              />
-              {hasReturn && (
-                <DirectionCell
-                  label="Retour"
-                  direction="retour"
-                  child={child}
-                  value={current.retour}
-                  disabled={!editable || save.isPending}
-                  onChange={(v) => update({ retour: v })}
-                />
+          <div key={child.id} className="rounded-xl border border-slate-200">
+            {/* Ligne compacte */}
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 p-3">
+              <span className="font-medium text-secondary">{child.firstName}</span>
+              {directions.map((d) => (
+                <label
+                  key={d}
+                  className={`flex cursor-pointer items-center gap-1.5 text-sm ${
+                    current[d] ? 'text-secondary' : 'text-slate-400'
+                  }`}
+                >
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4 accent-primary"
+                    disabled={disabled}
+                    checked={!!current[d]}
+                    onChange={(e) => {
+                      if (e.target.checked) {
+                        // Cocher : adresse par défaut, puis déplier pour la confirmer / changer.
+                        update({ [d]: tripAddressFromChild(child, 'default') }, true)
+                      } else {
+                        const rest = directions.filter((x) => x !== d).some((x) => !!current[x])
+                        update({ [d]: null }, rest ? undefined : false)
+                      }
+                    }}
+                  />
+                  <span className="font-medium">{DIR_LABEL[d]}</span>
+                  <span className="text-xs">({placeLabel(current[d])})</span>
+                </label>
+              ))}
+              {anyPresent && (
+                <button
+                  type="button"
+                  onClick={() => setOpen((o) => ({ ...o, [child.id]: !isOpen }))}
+                  className="ml-auto rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-secondary"
+                  aria-label={isOpen ? 'Replier' : "Changer l'adresse"}
+                  title={isOpen ? 'Replier' : "Changer l'adresse"}
+                >
+                  <ChevronDown className={`h-4 w-4 transition ${isOpen ? 'rotate-180' : ''}`} />
+                </button>
               )}
             </div>
+
+            {/* Choix des adresses (déplié) */}
+            {isOpen && anyPresent && (
+              <div className={`grid gap-3 border-t border-slate-100 p-3 ${hasReturn ? 'sm:grid-cols-2' : ''}`}>
+                {directions.map((d) =>
+                  current[d] ? (
+                    <div key={d} className="rounded-lg bg-slate-50 p-2.5">
+                      <div className="mb-2 text-xs font-semibold uppercase text-slate-400">
+                        {DIR_LABEL[d]} — lieu de {d === 'aller' ? 'prise en charge' : 'dépose'}
+                      </div>
+                      <TripAddressPicker
+                        child={child}
+                        value={current[d]!}
+                        disabled={disabled}
+                        onChange={(v) => update({ [d]: v }, false)}
+                      />
+                    </div>
+                  ) : null,
+                )}
+              </div>
+            )}
           </div>
         )
       })}
     </section>
-  )
-}
-
-function DirectionCell({
-  label,
-  direction,
-  child,
-  value,
-  disabled,
-  onChange,
-}: {
-  label: string
-  direction: Direction
-  child: Child
-  value: TripAddress | null
-  disabled: boolean
-  onChange: (v: TripAddress | null) => void
-}) {
-  return (
-    <div className="rounded-lg bg-slate-50 p-2.5">
-      <label className="flex cursor-pointer items-center gap-2 text-sm font-medium text-secondary">
-        <input
-          type="checkbox"
-          className="h-4 w-4 accent-primary"
-          disabled={disabled}
-          checked={!!value}
-          onChange={(e) =>
-            onChange(e.target.checked ? tripAddressFromChild(child, 'default') : null)
-          }
-        />
-        {label}
-        <span className="text-xs font-normal text-slate-400">
-          {value ? 'présent' : 'absent'}
-        </span>
-      </label>
-      {value && (
-        <div className="mt-2" data-direction={direction}>
-          <TripAddressPicker
-            child={child}
-            value={value}
-            disabled={disabled}
-            onChange={onChange}
-          />
-        </div>
-      )}
-    </div>
   )
 }
