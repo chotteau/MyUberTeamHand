@@ -104,7 +104,7 @@ handcovoiturage/
 6. **Tout le monde remplit** : n'importe quel parent place/déplace n'importe quel enfant
 7. **Places par voiture** (`cars.seats`, 2..6, défaut `config.defaultSeats` = 4, hors chauffeur ; l'enfant du chauffeur compte) — le placement automatique s'arrête quand c'est plein ; un +1 forcé à la main est accepté après confirmation (total rouge). Jamais bloquant
 8. **Gel après l'heure H** — `isEventEditable(event)` = `departureTime > now()` et statut `scheduled`, vérifié côté UI **et** règles Firestore
-9. **Placement automatique** (`SeatingPlan` dans `services/board.ts`) : première voiture déclarée ayant une place ; retirer une voiture rebascule ses passagers ; désinscrire un enfant le retire de sa voiture ; augmenter `seats` embarque les enfants en attente
+9. **Placement automatique** (`SeatingPlan` dans `services/board.ts`) : première voiture déclarée ayant une place ; retirer une voiture rebascule ses passagers ; désinscrire un enfant le retire de sa voiture ; augmenter `seats` embarque les enfants en attente. File d'attente = `participants.queuedAller/Retour` (inscription, remise à maintenant quand l'enfant sort d'une voiture) ; les enfants déjà en voiture ne bougent jamais
 10. **L'appli fait foi ; le calendrier est un miroir**
 11. **Prénoms uniquement** — jamais de nom de famille, téléphone ou email affiché
 

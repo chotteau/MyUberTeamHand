@@ -98,7 +98,8 @@ Un document par enfant inscrit à l'événement. **Document id = childId.**
   aller: TripAddress | null,      // null = l'enfant ne vient pas à l'aller
   retour: TripAddress | null,     // null = l'enfant ne rentre pas au retour
   note?: string,                  // commentaire du parent (info globale) → « 📝 Note pour X : … » en fin d'invitation ICS
-  registeredAt?: Timestamp,       // première inscription (ordre d'embarquement) ; absent avant le 14/09/2026 → updatedAt
+  queuedAller?: Timestamp,        // file d'attente par direction : date d'inscription, remise à maintenant quand l'enfant sort d'une voiture ; absent avant le 14/09/2026 → updatedAt
+  queuedRetour?: Timestamp,
   updatedBy: string,              // uid
   updatedAt: Timestamp
 }
@@ -228,7 +229,7 @@ Sur la page événement, bloc **« Mes enfants »** — **une ligne compacte par
 ### 2.5 Déclaration d'une voiture (chauffeur)
 
 Bloc **« Ma voiture »** : deux interrupteurs **« J'emmène »** / **« Je ramène »** + sélecteur **Places** (défaut `config.defaultSeats` = 4, choix 2–6 ; places pour les enfants, hors chauffeur — l'enfant du chauffeur en occupe une).
-- Activer une direction crée/maj `cars/{uid}` (avec `createdAt` = ordre de déclaration, `seats`). Les enfants **déjà inscrits sans voiture** y montent automatiquement, par ordre d'inscription (`participants.registeredAt`), tant qu'il reste des places. L'enfant du chauffeur est inscrit (adresse par défaut) et placé dans sa voiture — **sauf** s'il est déjà placé dans une autre voiture : l'app demande alors, par direction, s'il y reste ou s'il monte avec son parent ; s'il n'est placé nulle part mais qu'une autre voiture a de la place, l'app demande s'il monte avec son parent ou dans l'autre voiture. Ces inscriptions / placements n'ont lieu qu'à l'**activation** d'une direction : régler ensuite les places, le lieu de RDV ou la note ne réinscrit ni ne déplace personne (sauf augmentation des places → embarque les enfants en attente). L'enfant n'est **pas verrouillé** dans la voiture de son parent.
+- Activer une direction crée/maj `cars/{uid}` (avec `createdAt` = ordre de déclaration, `seats`). Les enfants **déjà inscrits sans voiture** y montent automatiquement, dans l'ordre de la **file d'attente** (`participants.queuedAller/Retour` : date d'inscription, remise à maintenant chaque fois que l'enfant sort d'une voiture — retrait de la voiture, ou déplacement manuel vers « Sans voiture »), tant qu'il reste des places. Les enfants déjà installés dans une voiture ne bougent jamais : un chauffeur qui change d'avis ne réordonne pas les autres voitures. L'enfant du chauffeur est inscrit (adresse par défaut) et placé dans sa voiture — **sauf** s'il est déjà placé dans une autre voiture : l'app demande alors, par direction, s'il y reste ou s'il monte avec son parent ; s'il n'est placé nulle part mais qu'une autre voiture a de la place, l'app demande s'il monte avec son parent ou dans l'autre voiture (le chauffeur peut ainsi renoncer à se déclarer). Si des enfants **attendent sans voiture**, le chauffeur reprend son enfant d'office (sans question) : la place libérée revient au premier de la file. Ces inscriptions / placements n'ont lieu qu'à l'**activation** d'une direction : régler ensuite les places, le lieu de RDV ou la note ne réinscrit ni ne déplace personne (sauf augmentation des places → embarque les enfants en attente). L'enfant n'est **pas verrouillé** dans la voiture de son parent.
 - Désactiver une direction (ou les deux → suppression de la voiture) : ses passagers sont **rebasculés automatiquement** dans les autres voitures actives ayant de la place (ordre de déclaration), le reste passe « sans voiture » (alerte).
 - Changer les places : augmenter embarque les enfants en attente ; diminuer ne déplace personne (le total passe au rouge si dépassé).
 - Une fois déclaré, le chauffeur peut fixer un **lieu de rendez-vous** par direction (`meetAller` / `meetRetour`) : « chez chaque enfant » (défaut), une de ses adresses (celles de ses enfants : défaut / secondaire) ou une autre adresse saisie ; et un **commentaire** (`note`, 200 caractères, enregistré à la sortie du champ). Les deux vont dans le calendrier (2.7).
@@ -429,7 +430,13 @@ service cloud.firestore {
       match /participants/{childId} {
         allow read: if isAuth();
         allow write: if isAdmin()
-                     || (isAuth() && isParentOf(childId) && eventEditable(eventId));
+                     || (isAuth() && isActive() && isParentOf(childId) && eventEditable(eventId)
+                         && (request.method == 'delete'
+                             || request.resource.data.childId == childId))
+                     // File d'attente : tout le monde peut remettre queuedAller/queuedRetour
+                     || (isAuth() && isActive() && eventEditable(eventId)
+                         && request.method == 'update'
+                         && onlyKeys(['queuedAller', 'queuedRetour']));
       }
 
       match /cars/{driverUid} {
