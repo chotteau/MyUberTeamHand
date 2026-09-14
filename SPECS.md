@@ -98,6 +98,7 @@ Un document par enfant inscrit à l'événement. **Document id = childId.**
   aller: TripAddress | null,      // null = l'enfant ne vient pas à l'aller
   retour: TripAddress | null,     // null = l'enfant ne rentre pas au retour
   note?: string,                  // commentaire du parent (info globale) → « 📝 Note pour X : … » en fin d'invitation ICS
+  registeredAt?: Timestamp,       // première inscription (ordre d'embarquement) ; absent avant le 14/09/2026 → updatedAt
   updatedBy: string,              // uid
   updatedAt: Timestamp
 }
@@ -227,7 +228,7 @@ Sur la page événement, bloc **« Mes enfants »** — **une ligne compacte par
 ### 2.5 Déclaration d'une voiture (chauffeur)
 
 Bloc **« Ma voiture »** : deux interrupteurs **« J'emmène »** / **« Je ramène »** + sélecteur **Places** (défaut `config.defaultSeats` = 4, choix 2–6 ; places pour les enfants, hors chauffeur — l'enfant du chauffeur en occupe une).
-- Activer une direction crée/maj `cars/{uid}` (avec `createdAt` = ordre de déclaration, `seats`). Les enfants **déjà inscrits sans voiture** y montent automatiquement, par ordre d'inscription, tant qu'il reste des places. L'enfant du chauffeur est inscrit (adresse par défaut) et placé dans sa voiture — **sauf** s'il est déjà placé dans une autre voiture : l'app demande alors, par direction, s'il y reste ou s'il monte avec son parent ; s'il n'est placé nulle part mais qu'une autre voiture a de la place, l'app demande s'il monte avec son parent ou dans l'autre voiture. Ces inscriptions / placements n'ont lieu qu'à l'**activation** d'une direction : régler ensuite les places, le lieu de RDV ou la note ne réinscrit ni ne déplace personne (sauf augmentation des places → embarque les enfants en attente). L'enfant n'est **pas verrouillé** dans la voiture de son parent.
+- Activer une direction crée/maj `cars/{uid}` (avec `createdAt` = ordre de déclaration, `seats`). Les enfants **déjà inscrits sans voiture** y montent automatiquement, par ordre d'inscription (`participants.registeredAt`), tant qu'il reste des places. L'enfant du chauffeur est inscrit (adresse par défaut) et placé dans sa voiture — **sauf** s'il est déjà placé dans une autre voiture : l'app demande alors, par direction, s'il y reste ou s'il monte avec son parent ; s'il n'est placé nulle part mais qu'une autre voiture a de la place, l'app demande s'il monte avec son parent ou dans l'autre voiture. Ces inscriptions / placements n'ont lieu qu'à l'**activation** d'une direction : régler ensuite les places, le lieu de RDV ou la note ne réinscrit ni ne déplace personne (sauf augmentation des places → embarque les enfants en attente). L'enfant n'est **pas verrouillé** dans la voiture de son parent.
 - Désactiver une direction (ou les deux → suppression de la voiture) : ses passagers sont **rebasculés automatiquement** dans les autres voitures actives ayant de la place (ordre de déclaration), le reste passe « sans voiture » (alerte).
 - Changer les places : augmenter embarque les enfants en attente ; diminuer ne déplace personne (le total passe au rouge si dépassé).
 - Une fois déclaré, le chauffeur peut fixer un **lieu de rendez-vous** par direction (`meetAller` / `meetRetour`) : « chez chaque enfant » (défaut), une de ses adresses (celles de ses enfants : défaut / secondaire) ou une autre adresse saisie ; et un **commentaire** (`note`, 200 caractères, enregistré à la sortie du champ). Les deux vont dans le calendrier (2.7).
@@ -256,7 +257,7 @@ Total             │    2    │     1     │     │    1    │    2     │
 - Cellule grisée « ─ » si l'enfant n'est pas inscrit pour cette direction.
 - Ligne **Total** : « n/places » par voiture — **vert** si plein (n = places), **rouge** si n > places (alerte « Voiture de X : 5 enfants pour 4 places »). Cliquer une voiture pleine demande confirmation avant de forcer le +1. Un 📍 dans l'en-tête signale un lieu de rendez-vous imposé (adresse au survol).
 - Bandeau d'alertes au-dessus : « ❗ 2 enfants sans voiture à l'aller », « ❗ Aucune voiture au retour ».
-- L'adresse du jour de chaque enfant (label, ex. « Chez Maman », ou l'adresse custom) et son commentaire sont visibles au survol / appui long du prénom (le tableau reste compact sur mobile ; l'adresse complète est dans le calendrier).
+- Toucher le prénom d'un enfant affiche sous celui-ci ses adresses du jour (label, ex. « Chez Maman », ou l'adresse custom) et son commentaire (💬 à côté du prénom s'il y en a un) ; retoucher replie. Le tableau reste compact.
 - **Tout parent authentifié** peut remplir / déplacer **n'importe quel** enfant. Un chauffeur peut ainsi « prendre » les enfants sans voiture ; une nouvelle voiture peut reprendre tous les enfants d'une autre (action « Tout prendre » sur l'en-tête de colonne).
 - Temps réel (`onSnapshot` sur `participants` et `cars`).
 - Mobile : première colonne figée, défilement horizontal du tableau.

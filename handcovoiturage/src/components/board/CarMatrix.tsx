@@ -1,6 +1,7 @@
+import { useState } from 'react'
 import { useMutation } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
-import { AlertTriangle, CheckCircle2, MapPin, Users, X } from 'lucide-react'
+import { AlertTriangle, CheckCircle2, MapPin, MessageSquare, Users, X } from 'lucide-react'
 import { assignChild, carOf as carOfIn, meetKey, orderCars, passengersKey, removeCarDirection, seatsOf, summarizeDirection, takeAll } from '../../services/board'
 import { HelpLink } from '../ui/HelpLink'
 import { formatAddress, tripAddressLabel } from '../../utils/address'
@@ -27,6 +28,8 @@ export function CarMatrix({ event, participants, cars, editable, canRemoveCar }:
   const directions: Direction[] = event.returnTime ? ['aller', 'retour'] : ['aller']
 
   const rows = [...participants].sort((a, b) => a.childName.localeCompare(b.childName))
+  // Prénom touché → détail (adresses du jour, commentaire) sous le prénom. Pas d'info-bulle sur mobile.
+  const [detail, setDetail] = useState<string | null>(null)
   const ordered = orderCars(cars)
   const columns = directions.map((d) => ({ direction: d, cars: ordered.filter((c) => c[d]) }))
 
@@ -155,14 +158,29 @@ export function CarMatrix({ event, participants, cars, editable, canRemoveCar }:
           <tbody>
             {rows.map((p) => (
               <tr key={p.childId} className="border-t border-slate-100">
-                <td
-                  className="sticky left-0 z-10 bg-white p-2 align-middle font-medium text-secondary"
-                  title={[
-                    ...directions.filter((d) => p[d]).map((d) => `${DIR_LABEL[d]} : ${tripAddressLabel(p[d])}`),
-                    ...(p.note ? [`Commentaire : ${p.note}`] : []),
-                  ].join(' · ')}
-                >
-                  {p.childName}
+                <td className="sticky left-0 z-10 bg-white p-2 align-middle font-medium text-secondary">
+                  <button
+                    type="button"
+                    onClick={() => setDetail(detail === p.childId ? null : p.childId)}
+                    className="flex items-center gap-1 text-left"
+                    aria-expanded={detail === p.childId}
+                    title="Adresses du jour et commentaire"
+                  >
+                    {p.childName}
+                    {p.note && <MessageSquare className="h-3 w-3 text-slate-400" />}
+                  </button>
+                  {detail === p.childId && (
+                    <div className="mt-0.5 max-w-44 whitespace-normal text-xs font-normal text-slate-500">
+                      {directions
+                        .filter((d) => p[d])
+                        .map((d) => (
+                          <div key={d}>
+                            {DIR_LABEL[d]} : {tripAddressLabel(p[d])}
+                          </div>
+                        ))}
+                      {p.note && <div>💬 {p.note}</div>}
+                    </div>
+                  )}
                 </td>
                 {columns.map((col) => {
                   const present = !!p[col.direction]

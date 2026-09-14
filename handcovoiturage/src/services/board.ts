@@ -240,6 +240,7 @@ export async function setParticipation(
       aller: input.aller,
       retour: input.retour,
       note: (input.note ?? current?.note ?? '').trim(),
+      registeredAt: current?.registeredAt ?? serverTimestamp(),
       updatedBy: uid,
       updatedAt: serverTimestamp(),
     })
@@ -384,9 +385,11 @@ export async function setMyCar(
   // de la place (ordre de déclaration), par ordre d'inscription — seulement
   // quand une direction vient d'être activée ou que les places ont augmenté
   // (changer le lieu de RDV ou la note ne déplace personne).
-  const byRegistration = [...participants].sort(
-    (a, b) => (a.updatedAt ? toDate(a.updatedAt).getTime() : 0) - (b.updatedAt ? toDate(b.updatedAt).getTime() : 0),
-  )
+  const registeredMs = (p: Participant) => {
+    const t = p.registeredAt ?? p.updatedAt
+    return t ? toDate(t).getTime() : 0
+  }
+  const byRegistration = [...participants].sort((a, b) => registeredMs(a) - registeredMs(b))
   for (const d of DIRECTIONS) {
     if (!(d === 'aller' ? aller : retour)) continue
     if (!justOn[d] && !grew) continue
@@ -429,6 +432,7 @@ export async function setMyCar(
       childName: child.firstName,
       ...next,
       note: cur?.note ?? '',
+      registeredAt: cur?.registeredAt ?? serverTimestamp(),
       updatedBy: driver.uid,
       updatedAt: serverTimestamp(),
     })
