@@ -52,7 +52,12 @@ service cloud.firestore {
         allow write: if isAdmin()
                      || (isAuth() && isActive() && isParentOf(childId) && eventEditable(eventId)
                          && (request.method == 'delete'
-                             || request.resource.data.childId == childId));
+                             || request.resource.data.childId == childId))
+                     // File d'attente : retirer une voiture / déplacer un enfant (tout le monde)
+                     // remet sa date d'attente à maintenant — seuls ces deux champs.
+                     || (isAuth() && isActive() && eventEditable(eventId)
+                         && request.method == 'update'
+                         && onlyKeys(['queuedAller', 'queuedRetour']));
       }
 
       // Voiture : créée/supprimée par son chauffeur (règle 4) ;

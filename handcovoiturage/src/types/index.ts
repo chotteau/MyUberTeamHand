@@ -108,8 +108,13 @@ export interface Participant {
   retour: TripAddress | null
   /** Commentaire libre du parent (info globale, pas lié à une direction), repris en fin d'invitation ICS. */
   note?: string
-  /** Première inscription (ordre d'embarquement automatique). Absent avant le 14/09/2026 → updatedAt. */
-  registeredAt?: Timestamp
+  /**
+   * File d'attente par direction (ordre d'embarquement automatique) : date
+   * d'inscription, remise à maintenant chaque fois que l'enfant sort d'une
+   * voiture. Absent avant le 14/09/2026 → updatedAt.
+   */
+  queuedAller?: Timestamp
+  queuedRetour?: Timestamp
   updatedBy: string
   updatedAt: Timestamp
 }

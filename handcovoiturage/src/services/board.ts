@@ -29,6 +29,9 @@ export const SEAT_CHOICES = Array.from({ length: MAX_SEATS - MIN_SEATS + 1 }, (_
 /** Places disponibles (enfants, hors chauffeur) d'une voiture. */
 export const seatsOf = (c: Car): number => c.seats ?? DEFAULT_SEATS
 
+/** Champ « en attente depuis » d'un participant pour une direction. */
+export const queuedKey = (d: Direction) => (d === 'aller' ? ('queuedAller' as const) : ('queuedRetour' as const))
+
 /** Champ lieu de rendez-vous correspondant à une direction. */
 export const meetKey = (d: Direction) => (d === 'aller' ? ('meetAller' as const) : ('meetRetour' as const))
 
@@ -130,10 +133,15 @@ class SeatingPlan {
   private seats = new Map<string, { passengersAller: string[]; passengersRetour: string[] }>()
   private readonly cars: Car[]
   private readonly ordered: Car[]
+  /** Participants connus : seuls eux reçoivent une date de file d'attente (le doc doit exister). */
+  private readonly known: Set<string>
+  /** Enfants sortis d'une voiture pendant ce plan, par direction. */
+  private readonly left: Record<Direction, Set<string>> = { aller: new Set(), retour: new Set() }
 
-  constructor(cars: Car[]) {
+  constructor(cars: Car[], known: Participant[] = []) {
     this.cars = cars
     this.ordered = orderCars(cars)
+    this.known = new Set(known.map((p) => p.childId))
     for (const c of cars) {
       this.seats.set(c.id, {
         passengersAller: [...c.passengersAller],
@@ -153,9 +161,11 @@ class SeatingPlan {
 
   /** Retire un enfant de toutes les voitures pour une direction. */
   unseat(childId: string, d: Direction): void {
+    const k = passengersKey(d)
     for (const s of this.seats.values()) {
-      const k = passengersKey(d)
+      if (!s[k].includes(childId)) continue
       s[k] = s[k].filter((id) => id !== childId)
+      this.left[d].add(childId)
     }
   }
 
@@ -183,7 +193,12 @@ class SeatingPlan {
     return target.id
   }
 
-  /** Écrit uniquement les voitures dont les listes ont changé (`skip` : voiture écrite/supprimée à part). */
+  /**
+   * Écrit uniquement les voitures dont les listes ont changé (`skip` : voiture
+   * écrite/supprimée à part). Un enfant sorti d'une voiture et resté sans
+   * voiture repart en fin de file d'attente (`queuedAller/Retour` = maintenant) :
+   * les enfants déjà en attente passent avant lui quand une place se libère.
+   */
   apply(batch: WriteBatch, eventId: string, skip?: string): void {
     for (const c of this.cars) {
       if (c.id === skip) continue
@@ -193,6 +208,12 @@ class SeatingPlan {
         s.passengersRetour.join() === c.passengersRetour.join()
       if (!same) {
         batch.update(doc(carsCol(eventId), c.id), { ...s, updatedAt: serverTimestamp() })
+      }
+    }
+    for (const d of DIRECTIONS) {
+      for (const id of this.left[d]) {
+        if (!this.known.has(id) || this.isSeated(id, d)) continue
+        batch.update(doc(participantsCol(eventId), id), { [queuedKey(d)]: serverTimestamp() })
       }
     }
   }
@@ -240,7 +261,9 @@ export async function setParticipation(
       aller: input.aller,
       retour: input.retour,
       note: (input.note ?? current?.note ?? '').trim(),
-      registeredAt: current?.registeredAt ?? serverTimestamp(),
+      // File d'attente : date d'inscription pour une direction nouvellement cochée, conservée sinon.
+      queuedAller: input.aller ? (current?.aller ? current.queuedAller : serverTimestamp()) : undefined,
+      queuedRetour: input.retour ? (current?.retour ? current.queuedRetour : serverTimestamp()) : undefined,
       updatedBy: uid,
       updatedAt: serverTimestamp(),
     })
@@ -329,7 +352,7 @@ export async function setMyCar(
 
   // Voiture retirée : rebasculer ses passagers dans les autres voitures.
   if (!aller && !retour) {
-    const plan = new SeatingPlan(allCars)
+    const plan = new SeatingPlan(allCars, participants)
     for (const d of DIRECTIONS) {
       if (!existing?.[d]) continue
       for (const id of existing[passengersKey(d)]) plan.autoSeat(id, d, driver.uid)
@@ -352,7 +375,7 @@ export async function setMyCar(
     passengersRetour: [],
     updatedAt: undefined as unknown as Car['updatedAt'],
   }
-  const fullPlan = new SeatingPlan([...others, { ...mine, aller, retour, seats }])
+  const fullPlan = new SeatingPlan([...others, { ...mine, aller, retour, seats }], participants)
   const justOn: Record<Direction, boolean> = {
     aller: aller && !(existing?.aller ?? false),
     retour: retour && !(existing?.retour ?? false),
@@ -382,18 +405,18 @@ export async function setMyCar(
   }
 
   // Enfants déjà inscrits et sans voiture : ils montent dans les voitures ayant
-  // de la place (ordre de déclaration), par ordre d'inscription — seulement
-  // quand une direction vient d'être activée ou que les places ont augmenté
-  // (changer le lieu de RDV ou la note ne déplace personne).
-  const registeredMs = (p: Participant) => {
-    const t = p.registeredAt ?? p.updatedAt
+  // de la place (ordre de déclaration), dans l'ordre de la file d'attente —
+  // seulement quand une direction vient d'être activée ou que les places ont
+  // augmenté (changer le lieu de RDV ou la note ne déplace personne).
+  const queuedMs = (p: Participant, d: Direction) => {
+    const t = p[queuedKey(d)] ?? p.updatedAt
     return t ? toDate(t).getTime() : 0
   }
-  const byRegistration = [...participants].sort((a, b) => registeredMs(a) - registeredMs(b))
   for (const d of DIRECTIONS) {
     if (!(d === 'aller' ? aller : retour)) continue
     if (!justOn[d] && !grew) continue
-    for (const p of byRegistration) {
+    const byQueue = [...participants].sort((a, b) => queuedMs(a, d) - queuedMs(b, d))
+    for (const p of byQueue) {
       if (p[d] && !fullPlan.isSeated(p.childId, d)) fullPlan.autoSeat(p.childId, d)
     }
   }
@@ -432,7 +455,8 @@ export async function setMyCar(
       childName: child.firstName,
       ...next,
       note: cur?.note ?? '',
-      registeredAt: cur?.registeredAt ?? serverTimestamp(),
+      queuedAller: next.aller ? (cur?.aller ? cur.queuedAller : serverTimestamp()) : undefined,
+      queuedRetour: next.retour ? (cur?.retour ? cur.queuedRetour : serverTimestamp()) : undefined,
       updatedBy: driver.uid,
       updatedAt: serverTimestamp(),
     })
@@ -470,13 +494,14 @@ export async function removeCarDirection(
   carId: string,
   d: Direction,
   cars: Car[],
+  participants: Participant[],
 ): Promise<void> {
   const car = cars.find((c) => c.id === carId)
   if (!car) return
   const other: Direction = d === 'aller' ? 'retour' : 'aller'
-  if (!car[other]) return removeCar(eventId, carId, cars)
+  if (!car[other]) return removeCar(eventId, carId, cars, participants)
 
-  const plan = new SeatingPlan(cars)
+  const plan = new SeatingPlan(cars, participants)
   for (const id of car[passengersKey(d)]) plan.autoSeat(id, d, carId)
   const batch = writeBatch(db)
   plan.apply(batch, eventId, carId)
@@ -494,11 +519,12 @@ export async function removeCar(
   eventId: string,
   carId: string,
   cars: Car[],
+  participants: Participant[],
 ): Promise<void> {
   const car = cars.find((c) => c.id === carId)
   const batch = writeBatch(db)
   if (car) {
-    const plan = new SeatingPlan(cars)
+    const plan = new SeatingPlan(cars, participants)
     for (const d of DIRECTIONS) {
       if (!car[d]) continue
       for (const id of car[passengersKey(d)]) plan.autoSeat(id, d, carId)
@@ -524,8 +550,9 @@ export async function assignChild(
   direction: Direction,
   carId: string | null,
   cars: Car[],
+  participants: Participant[],
 ): Promise<void> {
-  const plan = new SeatingPlan(cars)
+  const plan = new SeatingPlan(cars, participants)
   if (carId) plan.seat(childId, direction, carId)
   else plan.unseat(childId, direction)
   const batch = writeBatch(db)
@@ -544,7 +571,7 @@ export async function takeAll(
   participants: Participant[],
   cars: Car[],
 ): Promise<void> {
-  const plan = new SeatingPlan(cars)
+  const plan = new SeatingPlan(cars, participants)
   for (const p of participants) if (p[direction]) plan.seat(p.childId, direction, carId)
   const batch = writeBatch(db)
   plan.apply(batch, eventId)
@@ -588,9 +615,9 @@ export async function purgeDriverFromUpcomingEvents(uid: string): Promise<number
   const events = await upcomingEditableEvents()
   const results = await Promise.all(
     events.map(async (ev) => {
-      const cars = await getCars(ev.id)
+      const { participants, cars } = await getBoard(ev.id)
       if (!cars.some((c) => c.id === uid)) return 0
-      await removeCar(ev.id, uid, cars)
+      await removeCar(ev.id, uid, cars, participants)
       return 1
     }),
   )

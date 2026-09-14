@@ -4,6 +4,7 @@ import toast from 'react-hot-toast'
 import { Car as CarIcon, MapPin } from 'lucide-react'
 import {
   SEAT_CHOICES,
+  carOf,
   carOptionsOf,
   clampSeats,
   childrenSeatedElsewhere,
@@ -78,7 +79,11 @@ export function MyCarBlock({
       const withRoom = otherActiveCars(cars, driver.uid, d).filter(
         (c) => c[passengersKey(d)].length < seatsOf(c),
       )
-      if (elsewhere.length > 0) {
+      const waiting = participants.filter((p) => p[d] && !carOf(cars, p.childId, d)).length
+      if (elsewhere.length > 0 && waiting > 0) {
+        // Des enfants attendent une place : le chauffeur reprend son enfant, ce qui libère une place.
+        toast(`${kids} monte avec vous pour ${label} : la place libérée revient à un enfant en attente.`)
+      } else if (elsewhere.length > 0) {
         const who = elsewhere
           .map((e) => `${nameOf(e.childId)} est déjà dans la voiture de ${e.driverName}`)
           .join(', ')

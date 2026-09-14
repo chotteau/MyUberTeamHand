@@ -35,7 +35,7 @@ export function CarMatrix({ event, participants, cars, editable, canRemoveCar }:
 
   const assign = useMutation({
     mutationFn: (v: { childId: string; direction: Direction; carId: string | null }) =>
-      assignChild(event.id, v.childId, v.direction, v.carId, cars),
+      assignChild(event.id, v.childId, v.direction, v.carId, cars, participants),
     onError: (e) => toast.error(e instanceof Error ? e.message : 'Échec'),
   })
   const grab = useMutation({
@@ -45,7 +45,7 @@ export function CarMatrix({ event, participants, cars, editable, canRemoveCar }:
   })
   const remove = useMutation({
     mutationFn: (v: { carId: string; direction: Direction }) =>
-      removeCarDirection(event.id, v.carId, v.direction, cars),
+      removeCarDirection(event.id, v.carId, v.direction, cars, participants),
     onError: () => toast.error('Échec'),
   })
   const busy = assign.isPending || grab.isPending || remove.isPending
