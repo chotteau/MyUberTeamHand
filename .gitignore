@@ -22,3 +22,5 @@ handcovoiturage/.env.local
 .DS_Store
 *.log
 familles-import.csv
+
+.claude/settings.local.json
